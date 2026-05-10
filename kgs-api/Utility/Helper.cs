@@ -2,8 +2,15 @@
 {
     public static class Helper
     {
-        public static string Admin = "Admin";
-        public static string Patient = "Patient";
-        public static string Doctor = "Doctor";
+        // Roles
+        public const string Admin = "Admin";
+        public const string Member = "Member";
+        public const string User = "User";
+
+        // Trạng thái bài đăng (THÊM PHẦN NÀY)
+        public const string StatusPending = "Pending";
+        public const string StatusApproved = "Approved";
+        public const string StatusRejected = "Rejected";
+
     }
 }

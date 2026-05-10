@@ -3,6 +3,7 @@ using kgs_api.Models;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace kgs_api.Services
@@ -16,7 +17,7 @@ namespace kgs_api.Services
             _config = config ?? throw new ArgumentNullException(nameof(config));
         }
 
-        public string CreateToken(ApplicationUser user)
+        public string CreateToken(ApplicationUser user, IList<string> roles)
         {
             var secretKey = _config["AppSettings:TokenKey"];
 
@@ -26,15 +27,24 @@ namespace kgs_api.Services
             }
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
-
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var claims = new List<Claim>
             {
-                new Claim(JwtRegisteredClaimNames.Sub, user.UserName),
+                new Claim(ClaimTypes.Name, user.UserName),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new Claim(ClaimTypes.NameIdentifier, user.Id)
+                new Claim(ClaimTypes.NameIdentifier, user.Id),
             };
+
+            /// <summary>
+            /// Thêm tất cả các quyền của user vào thẻ JWT
+            /// </summary>
+
+            foreach (var role in roles)
+            {
+                claims.Add(new Claim(ClaimTypes.Role, role));
+
+            }
 
             var token = new JwtSecurityToken(
                 issuer: null,
@@ -46,13 +56,14 @@ namespace kgs_api.Services
 
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
+
+        public string GenerateRefreshToken()
+        {
+            var randomNumber = new byte[32];
+            using var rng = RandomNumberGenerator.Create();
+            rng.GetBytes(randomNumber);
+            return Convert.ToBase64String(randomNumber);
+
+        }
     }
 }
-
-//Claims là những mẩu thông tin được đóng gói bên trong thẻ JWT. Ở đây bạn đang nhét vào 3 thông tin:
-
-//Sub(Subject): Tên đăng nhập (UserName) của người dùng.
-
-//Jti (JWT ID): Một mã ID ngẫu nhiên (Guid) cho chính cái token này. Giúp hệ thống chống lại các cuộc tấn công phát lại (Replay Attacks).
-
-//NameIdentifier: ID gốc của user trong cơ sở dữ liệu.

@@ -1,6 +1,7 @@
 ﻿using kgs_api.Data;
 using kgs_api.Interfaces;
 using kgs_api.Models;
+using kgs_api.Models.DTOs;
 using kgs_api.Models.ViewModels;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -31,6 +32,9 @@ namespace kgs_api.Controllers
             _roleManager = roleManager;
         }
 
+
+        #region Đăng Nhập 
+
         [HttpPost("login")]
         public async Task<ActionResult> Login([FromBody] LoginViewModel model)
         {
@@ -45,23 +49,31 @@ namespace kgs_api.Controllers
                 return Unauthorized("Invalid email or password.");
             }
 
-            // BƯỚC 2: Dùng UserManager để kiểm tra mật khẩu thay vì SignInManager
             var isPasswordCorrect = await _userManger.CheckPasswordAsync(user, model.Password);
 
             if (!isPasswordCorrect) return Unauthorized("Mật khẩu không đúng.");
 
+            var roles = await _userManger.GetRolesAsync(user);
 
             // Generate JWT token
-            var token = _tokenService.CreateToken(user);
+            var token = _tokenService.CreateToken(user, roles);
+            var refreshToken = _tokenService.GenerateRefreshToken();
+
+            // Lưu refresh token vào database
+            await _userManger.SetAuthenticationTokenAsync(user, "KGS", "RefreshToken", refreshToken);
 
             return Ok(new
             {
                 message = "Login successful",
                 username = user.UserName,
-                token
+                roles,
+                token,
+                refreshToken
             });
         }
+        #endregion
 
+        #region Đăng Ký 
         [HttpPost("register")]
         public async Task<ActionResult> Register([FromBody] RegisterViewModel model)
         {
@@ -77,6 +89,18 @@ namespace kgs_api.Controllers
                 return BadRequest("Email is already registered.");
             }
 
+            if (!string.IsNullOrEmpty(model.Role) && model.Role.Equals(Utility.Helper.Admin, StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest("Lỗi bảo mật: Không được phép tự đăng ký quyền Quản trị viên.");
+            }
+
+            string roleToAssign = Utility.Helper.User;
+
+            if (!string.IsNullOrEmpty(model.Role) && (model.Role == Utility.Helper.Member || model.Role == Utility.Helper.User))
+            {
+                roleToAssign = model.Role;
+            }
+
             var user = new ApplicationUser
             {
                 UserName = model.Email,
@@ -90,9 +114,47 @@ namespace kgs_api.Controllers
             {
                 return BadRequest(new { message = "Registration failed" });
             }
+
+            await _userManger.AddToRoleAsync(user, roleToAssign);
+
+
             // Optionally, assign a default role to the user here
             return Ok(new { message = "Registration successful", userName = user.Name });
 
         }
+
+        #endregion
+
+        #region Cấp Token Mới Sử Dụng Refresh Token
+        [HttpPost("refresh")]
+        public async Task<IActionResult> Refresh([FromBody] TokenModel tokenModel, string email)
+        {
+            if (tokenModel is null) return BadRequest("Invalid client request");
+
+            var user = await _userManger.FindByEmailAsync(email);
+            if (user == null) return BadRequest("Invalid client request");
+
+            var savedRefreshToken = await _userManger.GetAuthenticationTokenAsync(user, "KGS", "RefreshToken");
+
+            if (savedRefreshToken != tokenModel.RefreshToken)
+            {
+                return Unauthorized("Refresh token không hợp lệ hoặc đã bị thu hồi.");
+            }
+
+            // Nếu hợp lệ -> Đúc Access Token mới & Refresh Token mới
+            var roles = await _userManger.GetRolesAsync(user);
+            var newAccessToken = _tokenService.CreateToken(user, roles);
+            var newRefreshToken = _tokenService.GenerateRefreshToken();
+
+            // 4. Lưu Refresh Token mới đè lên cái cũ
+            await _userManger.SetAuthenticationTokenAsync(user, "KGS", "RefreshToken", newRefreshToken);
+
+            return Ok(new
+            {
+                token = newAccessToken,
+                refreshToken = newRefreshToken
+            });
+        }
+        #endregion
     }
 }

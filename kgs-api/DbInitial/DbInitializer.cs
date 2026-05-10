@@ -2,7 +2,6 @@
 using kgs_api.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 
 namespace kgs_api.DbInitial
 {
@@ -41,8 +40,8 @@ namespace kgs_api.DbInitial
             await _roleManager.CreateAsync(new IdentityRole(Utility.Helper.Admin));
 
 
-            await _roleManager.CreateAsync(new IdentityRole(Utility.Helper.Doctor));
-            await _roleManager.CreateAsync(new IdentityRole(Utility.Helper.Patient));
+            await _roleManager.CreateAsync(new IdentityRole(Utility.Helper.Member));
+            await _roleManager.CreateAsync(new IdentityRole(Utility.Helper.User));
 
       
             var adminUser = new ApplicationUser
@@ -53,10 +52,21 @@ namespace kgs_api.DbInitial
                 EmailConfirmed = true
             };
 
-          
+            var memberUser = new ApplicationUser
+            {
+                UserName = "member@gmail.com",
+                Email = "member@gmail.com",
+                Name = "Member sprak",
+                EmailConfirmed = true
+            };
+
+
             var result = await _userManager.CreateAsync(adminUser, "Admin123!");
 
-            
+            var memberResult = await _userManager.CreateAsync(memberUser, "Member123!");
+
+
+
             if (result.Succeeded)
             {
               
@@ -64,6 +74,15 @@ namespace kgs_api.DbInitial
                 if (userInDb != null)
                 {
                     await _userManager.AddToRoleAsync(userInDb, Utility.Helper.Admin);
+                }
+            }
+
+            if (memberResult.Succeeded)
+            {
+                var memberInDb = await _userManager.FindByEmailAsync("member@gmail.com");
+                if (memberInDb != null)
+                {
+                    await _userManager.AddToRoleAsync(memberInDb, Utility.Helper.Member);
                 }
             }
         }

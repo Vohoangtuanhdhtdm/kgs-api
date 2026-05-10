@@ -10,7 +10,7 @@ namespace kgs_api.Data
         {
         }
         
-        public DbSet<Appointment> Appointments { get; set; }
+        public DbSet<Property> Properties { get; set; } 
 
     }
 }
