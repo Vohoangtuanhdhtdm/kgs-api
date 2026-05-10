@@ -3,6 +3,7 @@ using kgs_api.DbInitial;
 using kgs_api.Interfaces;
 using kgs_api.Models;
 using kgs_api.Services;
+using kgs_api.Utility;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -36,6 +37,12 @@ namespace kgs_api.Extensions
 
             // Services
             services.AddScoped<ITokenService, TokenService>();
+
+            // Đọc cấu hình từ appsettings map vào class CloudinarySettings
+            services.Configure<CloudinarySettings>(config.GetSection("CloudinarySettings"));
+
+            // Đăng ký PhotoService
+            services.AddScoped<IPhotoService, PhotoService>();
 
             // Ensure the JWT token is valid
             var secretKey = config["AppSettings:TokenKey"];
