@@ -11,6 +11,7 @@ namespace kgs_api.Data
         }
         
         public DbSet<Property> Properties { get; set; } 
+        public DbSet<UserAsset> UserAssets { get; set; }
 
     }
 }
