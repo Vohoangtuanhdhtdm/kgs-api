@@ -13,8 +13,8 @@ using kgs_api.Data;
 namespace kgs_api.Migrations
 {
     [DbContext(typeof(KgsDbContext))]
-    [Migration("20260509023704_init")]
-    partial class init
+    [Migration("20260512042415_initDB")]
+    partial class initDB
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -279,9 +279,15 @@ namespace kgs_api.Migrations
                     b.Property<List<string>>("Img")
                         .HasColumnType("text[]");
 
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("double precision");
+
                     b.Property<string>("LegalStatus")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("double precision");
 
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(18,2)");
@@ -312,6 +318,63 @@ namespace kgs_api.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("Properties");
+                });
+
+            modelBuilder.Entity("kgs_api.Models.UserAsset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("AcquisitionDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("EstimatedValue")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<double>("Latitude")
+                        .HasColumnType("double precision");
+
+                    b.Property<int?>("LinkedPropertyId")
+                        .HasColumnType("integer");
+
+                    b.Property<double>("Longitude")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ThumbnailUrl")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("UserAssets");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>

@@ -8,7 +8,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace kgs_api.Migrations
 {
     /// <inheritdoc />
-    public partial class init : Migration
+    public partial class initDB : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -51,6 +51,31 @@ namespace kgs_api.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_AspNetUsers", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "UserAssets",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    UserId = table.Column<string>(type: "text", nullable: false),
+                    Name = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
+                    Address = table.Column<string>(type: "text", nullable: false),
+                    Latitude = table.Column<double>(type: "double precision", nullable: false),
+                    Longitude = table.Column<double>(type: "double precision", nullable: false),
+                    Type = table.Column<int>(type: "integer", nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    EstimatedValue = table.Column<decimal>(type: "numeric(18,2)", nullable: true),
+                    AcquisitionDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    Notes = table.Column<string>(type: "text", nullable: true),
+                    ThumbnailUrl = table.Column<string>(type: "text", nullable: true),
+                    LinkedPropertyId = table.Column<int>(type: "integer", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_UserAssets", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -182,6 +207,8 @@ namespace kgs_api.Migrations
                     HouseDirection = table.Column<string>(type: "text", nullable: false),
                     LegalStatus = table.Column<string>(type: "text", nullable: false),
                     FurnitureState = table.Column<string>(type: "text", nullable: false),
+                    Latitude = table.Column<double>(type: "double precision", nullable: true),
+                    Longitude = table.Column<double>(type: "double precision", nullable: true),
                     Status = table.Column<string>(type: "text", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     UserId = table.Column<string>(type: "text", nullable: false)
@@ -260,6 +287,9 @@ namespace kgs_api.Migrations
 
             migrationBuilder.DropTable(
                 name: "Properties");
+
+            migrationBuilder.DropTable(
+                name: "UserAssets");
 
             migrationBuilder.DropTable(
                 name: "AspNetRoles");
