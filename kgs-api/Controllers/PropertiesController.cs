@@ -276,5 +276,92 @@ namespace kgs_api.Controllers
 
         }
         #endregion
+
+        #region Cập Nhật Tin Đăng
+        [Authorize(Roles = $"{Helper.Member},{Helper.Admin}")]
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateProperty(int id, [FromForm] PropertyViewModel model)
+        {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var property = await _context.Properties.FirstOrDefaultAsync(p => p.Id == id && p.UserId == currentUserId);
+
+            if (property == null) return NotFound("Không tìm thấy tin đăng.");
+
+            // 1. Kiểm tra thay đổi giá để đánh rớt Status
+            bool isPriceChanged = model.Price != property.Price;
+            if (isPriceChanged)
+            {
+                property.Price = model.Price;
+                property.Status = Helper.StatusPending;
+            }
+
+            // 2. Xử lý ảnh (nếu có upload mới)
+            if (model.Images != null && model.Images.Any())
+            {
+                // Xóa ảnh cũ trên Cloudinary trước
+                if (property.Img != null)
+                {
+                    foreach (var imgUrl in property.Img)
+                    {
+                        await _photoService.DeletePhotoAsync(imgUrl);
+                    }
+                }
+
+                // Upload ảnh mới
+                var uploadTasks = model.Images.Select(file => _photoService.AddPhotoAsync(file));
+                var uploadResults = await Task.WhenAll(uploadTasks);
+
+                var newImageUrls = new List<string>();
+                foreach (var result in uploadResults)
+                {
+                    if (result.Error != null) return BadRequest($"Lỗi upload ảnh: {result.Error.Message}");
+                    newImageUrls.Add(result.SecureUrl.AbsoluteUri);
+                }
+                property.Img = newImageUrls;
+            }
+
+            // 3. Cập nhật các trường thông tin
+            property.Title = model.Title;
+            property.Description = model.Description;
+            property.Area = model.Area;
+            property.Frontage = model.Frontage;
+            property.PropertyType = model.PropertyType;
+            property.Floors = model.Floors;
+            property.Bedrooms = model.Bedrooms;
+            property.Bathrooms = model.Bathrooms;
+            property.HouseDirection = model.HouseDirection;
+            property.LegalStatus = model.LegalStatus;
+            property.FurnitureState = model.FurnitureState;
+            property.City = model.City;
+            property.District = model.District;
+            property.Ward = model.Ward;
+            property.AddressDetail = model.AddressDetail;
+            property.Latitude = model.Latitude;
+            property.Longitude = model.Longitude;
+
+            // 4. Đồng bộ ngược lại vào UserAsset (Nếu tài sản này có LinkedPropertyId)
+            var linkedAsset = await _context.UserAssets.FirstOrDefaultAsync(a => a.LinkedPropertyId == property.Id);
+            if (linkedAsset != null)
+            {
+                linkedAsset.Name = model.Title;
+                linkedAsset.Address = $"{model.AddressDetail}, {model.Ward}, {model.District}, {model.City}";
+                linkedAsset.EstimatedValue = model.Price;
+                // Nếu ảnh được cập nhật, đồng bộ luôn ThumbnailUrl của Asset
+                if (property.Img != null && property.Img.Any())
+                {
+                    linkedAsset.ThumbnailUrl = property.Img.First();
+                }
+                linkedAsset.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                message = isPriceChanged ? "Đã cập nhật! Tin đăng đang chờ Admin duyệt lại." : "Cập nhật thành công.",
+                status = property.Status
+            });
+        }
+        #endregion
     }
 }

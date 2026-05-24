@@ -6,8 +6,10 @@ namespace kgs_api.Models.DTOs
     {
         public string Name { get; set; } = string.Empty;
         public string Address { get; set; } = string.Empty;
-        public double Latitude { get; set; }
-        public double Longitude { get; set; }
+
+        // QUAN TRỌNG: Đổi sang kiểu string để hứng FormData thô
+        public string? Latitude { get; set; }
+        public string? Longitude { get; set; }
         public AssetType Type { get; set; }
         public decimal? EstimatedValue { get; set; }
         public DateTime? AcquisitionDate { get; set; }
