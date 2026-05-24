@@ -41,8 +41,8 @@ namespace kgs_api.Models
         public string LegalStatus { get; set; } = string.Empty;
         public string FurnitureState { get; set; } = string.Empty;
 
-        public double? Latitude { get; set; }
-        public double? Longitude { get; set; }
+        public string? Latitude { get; set; }
+        public string? Longitude { get; set; }
 
 
         // "Pending" (Chờ duyệt), "Approved" (Đã duyệt), "Rejected" (Bị từ chối), "Sold" (Đã bán)

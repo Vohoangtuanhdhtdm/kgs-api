@@ -2,10 +2,12 @@
 using kgs_api.Interfaces;
 using kgs_api.Models;
 using kgs_api.Models.DTOs;
+using kgs_api.Utility;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 using System.Security.Claims;
 using static kgs_api.Models.Enums.UserAsset;
 
@@ -113,135 +115,212 @@ namespace kgs_api.Controllers
         }
         #endregion
 
-        #region PUT: api/assets/{id} - Cập nhật toàn bộ thông tin tài sản (Dùng cho Form Edit)
+        #region PUT: api/assets/{id} - Cập nhật & Kiểm duyệt Giá
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateAsset(Guid id, [FromForm] UpdateAssetRequest request)
         {
             var userId = GetCurrentUserId();
-            var asset = await _context.UserAssets
-                .FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId);
+            var asset = await _context.UserAssets.FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId);
 
             if (asset == null)
-                return NotFound(new { message = "Không tìm thấy tài sản hoặc bạn không có quyền sửa." });
+                return NotFound(new { message = "Không tìm thấy tài sản." });
+
+            double lat = 0, lng = 0;
+            if (!string.IsNullOrEmpty(request.Latitude))
+                double.TryParse(request.Latitude.Replace(",", "."), NumberStyles.Any, CultureInfo.InvariantCulture, out lat);
+            if (!string.IsNullOrEmpty(request.Longitude))
+                double.TryParse(request.Longitude.Replace(",", "."), NumberStyles.Any, CultureInfo.InvariantCulture, out lng);
 
             string? uploadedImageUrl = null;
-
-            
-            // Xử lý Upload ảnh Mới lên Cloudinary nếu có file
             if (request.Thumbnail != null && request.Thumbnail.Length > 0)
             {
-                try
-                {
-                    if (asset.ThumbnailUrl != null && asset.ThumbnailUrl.Any())
-                    {
-                        await _photoService.DeletePhotoAsync(asset.ThumbnailUrl);
-                    }
+                if (!string.IsNullOrEmpty(asset.ThumbnailUrl))
+                    await _photoService.DeletePhotoAsync(asset.ThumbnailUrl);
 
-                    var uploadResult = await _photoService.AddPhotoAsync(request.Thumbnail);
-                    if (uploadResult.Error != null)
-                    {
-                        return BadRequest(new { message = "Lỗi khi tải ảnh lên Cloudinary: " + uploadResult.Error.Message });
-                    }
-
+                var uploadResult = await _photoService.AddPhotoAsync(request.Thumbnail);
+                if (uploadResult.Error == null)
                     uploadedImageUrl = uploadResult.SecureUrl.AbsoluteUri;
-                }
-                catch (Exception ex)
+            }
+
+            bool isPriceChanged = false;
+            if (asset.LinkedPropertyId.HasValue)
+            {
+                var publicProperty = await _context.Properties.FindAsync(asset.LinkedPropertyId.Value);
+                if (publicProperty != null)
                 {
-                    return StatusCode(500, new { message = "Lỗi server khi xử lý hình ảnh.", details = ex.Message });
+                    if (request.EstimatedValue.HasValue && request.EstimatedValue.Value != publicProperty.Price)
+                    {
+                        isPriceChanged = true;
+                        publicProperty.Price = request.EstimatedValue.Value;
+
+                        // ĐÁNH TRẠNG THÁI VỀ PENDING VÌ ĐỔI GIÁ
+                        publicProperty.Status = Helper.StatusPending;
+                    }
+
+                    publicProperty.Title = request.Name;
+                    publicProperty.AddressDetail = request.Address;
+                    if (lat != 0) publicProperty.Latitude = lat.ToString(CultureInfo.InvariantCulture);
+                    if (lng != 0) publicProperty.Longitude = lng.ToString(CultureInfo.InvariantCulture);
+
+                    if (uploadedImageUrl != null)
+                    {
+                        publicProperty.Img ??= new List<string>();
+                        if (!publicProperty.Img.Contains(uploadedImageUrl))
+                            publicProperty.Img.Add(uploadedImageUrl);
+                    }
                 }
             }
 
-            // Cập nhật các trường
             asset.Name = request.Name;
             asset.Address = request.Address;
-            asset.Latitude = request.Latitude;
-            asset.Longitude = request.Longitude;
+            if (lat != 0) asset.Latitude = lat.ToString(CultureInfo.InvariantCulture);
+            if (lng != 0) asset.Longitude = lng.ToString(CultureInfo.InvariantCulture);
             asset.Type = request.Type;
             asset.EstimatedValue = request.EstimatedValue;
             asset.AcquisitionDate = request.AcquisitionDate;
             asset.Notes = request.Notes;
-            asset.ThumbnailUrl = uploadedImageUrl ?? asset.ThumbnailUrl;
-
+            if (uploadedImageUrl != null) asset.ThumbnailUrl = uploadedImageUrl;
             asset.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
-            return Ok(new { message = "Cập nhật tài sản thành công!", asset });
+
+            string msg = isPriceChanged
+                ? "Đã cập nhật! Do bạn thay đổi Giá bán, tin công khai đang được tạm ẩn chờ Admin duyệt lại."
+                : "Cập nhật tài sản thành công!";
+
+            return Ok(new { message = msg, asset, isPriceChanged });
         }
         #endregion
 
-        #region PUT: api/assets/{id}/status - API siêu nhẹ chuyên dụng cho việc đổi trạng thái từ Dropdown ngoài Grid/Card
-
+        #region PUT: api/assets/{id}/status - Cập nhật trạng thái và Đồng bộ Chợ BĐS
         [HttpPut("{id}/status")]
         public async Task<IActionResult> UpdateAssetStatus(Guid id, [FromBody] UpdateAssetStatusRequest request)
         {
             var userId = GetCurrentUserId();
+
+            // 1. Tìm tài sản
             var asset = await _context.UserAssets
                 .FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId);
 
             if (asset == null)
                 return NotFound(new { message = "Không tìm thấy tài sản." });
 
+            // 2. Kiểm tra Logic: Chưa đăng tin thì không được đổi sang trạng thái mua bán
+            if (!asset.LinkedPropertyId.HasValue && request.Status != AssetStatus.Private)
+            {
+                return BadRequest(new { message = "Tài sản chưa được đăng tin công khai. Vui lòng dùng chức năng Đăng tin." });
+            }
+
+            // 3. Cập nhật trạng thái cho Asset
             asset.Status = request.Status;
             asset.UpdatedAt = DateTime.UtcNow;
 
+            // 4. ĐỒNG BỘ SANG BẢNG PROPERTY (Nếu tài sản này đã được đăng lên Chợ)
+            if (asset.LinkedPropertyId.HasValue)
+            {
+                var publicProperty = await _context.Properties.FindAsync(asset.LinkedPropertyId.Value);
+
+                if (publicProperty != null)
+                {
+                    switch (request.Status)
+                    {
+                        case AssetStatus.Private:
+                            // Rút tin về: Đổi status Property thành "Rejected" hoặc thêm 1 status "Hidden" vào Helper của bạn
+                            publicProperty.Status = Helper.AssetStatusHidden;
+                            break;
+
+                        case AssetStatus.Sold:
+                        case AssetStatus.Rented:
+                            // Đã chốt giao dịch: Gỡ khỏi chợ hoặc đánh dấu Đã bán
+                            publicProperty.Status = Helper.AssetStatusSold; // Bạn có thể thêm Helper.StatusSold ở BE
+                            break;
+
+                        case AssetStatus.ForRent:
+                        case AssetStatus.ForSale:
+                            // Đăng lại tin: Đưa về trạng thái chờ duyệt hoặc hiển thị lại
+                            publicProperty.Status = Helper.StatusPending;
+                            break;
+                    }
+                }
+            }
+
             await _context.SaveChangesAsync();
-            return Ok(new { message = "Đã cập nhật trạng thái.", currentStatus = asset.Status });
+            return Ok(new { message = "Đã cập nhật trạng thái và đồng bộ hệ thống.", currentStatus = asset.Status });
         }
         #endregion
 
         #region POST: api/assets/{id}/publish - Công khai Đăng tin tài sản ra thị trường (Public Listing)
         [HttpPost("{id}/publish")]
-        public async Task<IActionResult> PublishAsset(Guid id, [FromBody] PublishAssetRequest request)
+        public async Task<IActionResult> PublishAsset(Guid id, [FromForm] PublishAssetRequest request)
         {
             var userId = GetCurrentUserId();
 
-            var asset = await _context.UserAssets
-                .FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId);
+            var asset = await _context.UserAssets.FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId);
 
             if (asset == null)
-                return NotFound(new { message = "Không tìm thấy tài sản hoặc bạn không có quyền truy cập." });
+                return NotFound(new { message = "Không tìm thấy tài sản." });
 
             if (asset.LinkedPropertyId.HasValue)
                 return BadRequest(new { message = "Tài sản này đã được đăng tin công khai." });
 
+            // 1. Xử lý Upload Ảnh (Giống hệt PropertiesController)
+            var imageUrls = new List<string>();
+            if (request.Images != null && request.Images.Any())
+            {
+                var uploadTasks = request.Images.Select(file => _photoService.AddPhotoAsync(file));
+                var uploadResults = await Task.WhenAll(uploadTasks);
+
+                foreach (var result in uploadResults)
+                {
+                    if (result.Error != null)
+                        return BadRequest(new { message = $"Lỗi khi tải ảnh: {result.Error.Message}" });
+                    imageUrls.Add(result.SecureUrl.AbsoluteUri);
+                }
+            }
+
+            // 2. Map dữ liệu
             var newProperty = new Property
             {
-                UserId = userId, // Map đúng tên trường của bạn
-                Title = request.PublicTitle ?? asset.Name,
-                AddressDetail = asset.Address, // Đưa địa chỉ gộp vào AddressDetail
+                UserId = userId,
+                Title = request.Title,
+                Description = request.Description,
+                Price = request.Price,
+                Img = imageUrls, // Gán list ảnh vừa upload
 
-                // Vì City, District, Ward là [Required], bạn có thể lấy từ request form 
-                // hoặc để giá trị mặc định nếu ở Asset chưa tách các trường này ra
-                City = request.City ?? "Chưa xác định",
-                District = request.District ?? "Chưa xác định",
-                Ward = request.Ward ?? "Chưa xác định",
+                // Vị trí (Kết hợp giữa Form và Asset)
+                City = request.City,
+                District = request.District,
+                Ward = request.Ward,
+                AddressDetail = asset.Address, // Lấy từ Asset
+                Latitude = asset.Latitude,     // Lấy từ Asset
+                Longitude = asset.Longitude,   // Lấy từ Asset
 
-                Price = request.ListingPrice,
-                Latitude = asset.Latitude,
-                Longitude = asset.Longitude,
-                PropertyType = asset.Type.ToString(), // Chuyển Enum thành string
-                Status = "Pending", // Trạng thái mặc định khi đăng tin mới
+                // Thông số kỹ thuật (Từ Form)
+                Area = request.Area,
+                Frontage = request.Frontage,
+                Floors = request.Floors,
+                Bedrooms = request.Bedrooms,
+                Bathrooms = request.Bathrooms,
+                HouseDirection = request.HouseDirection,
+                LegalStatus = request.LegalStatus,
+                FurnitureState = request.FurnitureState,
+
+                PropertyType = asset.Type.ToString(), // Lấy từ Asset
+                Status = "Pending",
                 CreatedAt = DateTime.UtcNow
             };
 
             _context.Properties.Add(newProperty);
+            await _context.SaveChangesAsync(); 
 
-            // Lưu lại Property trước để Entity Framework sinh ra ID (kiểu int) cho newProperty
-            await _context.SaveChangesAsync();
-
-            // 3. Cập nhật lại ID int vào Asset
-            asset.LinkedPropertyId = newProperty.Id; // Lúc này newProperty.Id đã có giá trị int hợp lệ
+            // 3. Liên kết ngược lại với Asset
+            asset.LinkedPropertyId = newProperty.Id;
             asset.Status = request.IsForRent ? AssetStatus.ForRent : AssetStatus.ForSale;
             asset.UpdatedAt = DateTime.UtcNow;
 
-            // 4. Lưu lại cập nhật của Asset
             await _context.SaveChangesAsync();
 
-            return Ok(new
-            {
-                message = "Đăng tin thành công!",
-                propertyId = newProperty.Id
-            });
+            return Ok(new { message = "Đăng tin thành công, đang chờ duyệt!" });
         }
         #endregion
 

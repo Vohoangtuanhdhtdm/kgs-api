@@ -12,5 +12,9 @@
         public const string StatusApproved = "Approved";
         public const string StatusRejected = "Rejected";
 
+        // UserAsset
+        public const string AssetStatusHidden = "Hidden";
+        public const string AssetStatusSold = "Sold";
+
     }
 }

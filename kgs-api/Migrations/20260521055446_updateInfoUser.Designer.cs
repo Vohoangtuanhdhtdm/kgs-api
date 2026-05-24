@@ -13,8 +13,8 @@ using kgs_api.Data;
 namespace kgs_api.Migrations
 {
     [DbContext(typeof(KgsDbContext))]
-    [Migration("20260512042415_initDB")]
-    partial class initDB
+    [Migration("20260521055446_updateInfoUser")]
+    partial class updateInfoUser
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -166,9 +166,18 @@ namespace kgs_api.Migrations
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("integer");
 
+                    b.Property<string>("AvatarUrl")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Bio")
+                        .HasColumnType("text");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Email")
                         .HasMaxLength(256)
@@ -279,15 +288,15 @@ namespace kgs_api.Migrations
                     b.Property<List<string>>("Img")
                         .HasColumnType("text[]");
 
-                    b.Property<double?>("Latitude")
-                        .HasColumnType("double precision");
+                    b.Property<string>("Latitude")
+                        .HasColumnType("text");
 
                     b.Property<string>("LegalStatus")
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<double?>("Longitude")
-                        .HasColumnType("double precision");
+                    b.Property<string>("Longitude")
+                        .HasColumnType("text");
 
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(18,2)");
@@ -339,14 +348,14 @@ namespace kgs_api.Migrations
                     b.Property<decimal?>("EstimatedValue")
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<double>("Latitude")
-                        .HasColumnType("double precision");
+                    b.Property<string>("Latitude")
+                        .HasColumnType("text");
 
                     b.Property<int?>("LinkedPropertyId")
                         .HasColumnType("integer");
 
-                    b.Property<double>("Longitude")
-                        .HasColumnType("double precision");
+                    b.Property<string>("Longitude")
+                        .HasColumnType("text");
 
                     b.Property<string>("Name")
                         .IsRequired()

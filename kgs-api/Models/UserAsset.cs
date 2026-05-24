@@ -19,8 +19,8 @@ namespace kgs_api.Models
         public string Address { get; set; } = string.Empty;
 
         // Geocoding Data
-        public double Latitude { get; set; }
-        public double Longitude { get; set; }
+        public string? Latitude { get; set; }
+        public string? Longitude { get; set; }
 
         public AssetType Type { get; set; }
         public AssetStatus Status { get; set; } = AssetStatus.Private;

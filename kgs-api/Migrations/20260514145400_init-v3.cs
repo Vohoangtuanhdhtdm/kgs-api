@@ -8,7 +8,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace kgs_api.Migrations
 {
     /// <inheritdoc />
-    public partial class initDB : Migration
+    public partial class initv3 : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -61,8 +61,8 @@ namespace kgs_api.Migrations
                     UserId = table.Column<string>(type: "text", nullable: false),
                     Name = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
                     Address = table.Column<string>(type: "text", nullable: false),
-                    Latitude = table.Column<double>(type: "double precision", nullable: false),
-                    Longitude = table.Column<double>(type: "double precision", nullable: false),
+                    Latitude = table.Column<string>(type: "text", nullable: true),
+                    Longitude = table.Column<string>(type: "text", nullable: true),
                     Type = table.Column<int>(type: "integer", nullable: false),
                     Status = table.Column<int>(type: "integer", nullable: false),
                     EstimatedValue = table.Column<decimal>(type: "numeric(18,2)", nullable: true),
@@ -207,8 +207,8 @@ namespace kgs_api.Migrations
                     HouseDirection = table.Column<string>(type: "text", nullable: false),
                     LegalStatus = table.Column<string>(type: "text", nullable: false),
                     FurnitureState = table.Column<string>(type: "text", nullable: false),
-                    Latitude = table.Column<double>(type: "double precision", nullable: true),
-                    Longitude = table.Column<double>(type: "double precision", nullable: true),
+                    Latitude = table.Column<string>(type: "text", nullable: true),
+                    Longitude = table.Column<string>(type: "text", nullable: true),
                     Status = table.Column<string>(type: "text", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     UserId = table.Column<string>(type: "text", nullable: false)
