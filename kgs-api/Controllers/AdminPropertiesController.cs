@@ -5,7 +5,7 @@ namespace kgs_api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class AccountController : ControllerBase
+    public class AdminPropertiesController : ControllerBase
     {
     }
 }

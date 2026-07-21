@@ -1,5 +1,5 @@
-﻿using kgs_api.Interfaces;
-using kgs_api.Models;
+﻿using kgs_api.Domain.Entity;
+using kgs_api.Interfaces;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
