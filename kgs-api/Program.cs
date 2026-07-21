@@ -1,6 +1,8 @@
-﻿using kgs_api.DbInitial;
+﻿using Hangfire;
 using kgs_api.Extensions;
+using kgs_api.Services;
 using Microsoft.OpenApi.Models;
+using static kgs_api.Common.Common;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -43,21 +45,6 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
-{
-    var services = scope.ServiceProvider;
-    try
-    {
-        var dbInitializer = services.GetRequiredService<IDbInitial>(); 
-        await dbInitializer.Initialize();
-    }
-    catch (Exception ex)
-    {
-       var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred during database initialization.");
-    }
-}
-
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -78,5 +65,10 @@ app.UseCors(builder => builder
 app.UseAuthorization();
 
 app.MapControllers();
-
+app.UseMiddleware<DomainExceptionMiddleware>();
+// Hangfire Dashboard (optional, cho dev)
+if (app.Environment.IsDevelopment())
+{
+    app.UseHangfireDashboard();
+}
 app.Run();

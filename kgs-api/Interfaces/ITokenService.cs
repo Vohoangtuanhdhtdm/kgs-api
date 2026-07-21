@@ -1,4 +1,4 @@
-﻿using kgs_api.Models;
+﻿using kgs_api.Domain.Entity;
 
 namespace kgs_api.Interfaces
 {

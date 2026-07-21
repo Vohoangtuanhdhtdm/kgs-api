@@ -1,14 +1,19 @@
-﻿using kgs_api.Data;
-using kgs_api.DbInitial;
+﻿using Hangfire;
+using Hangfire.PostgreSql;
+using kgs_api.Data;
+using kgs_api.Domain.Entity;
 using kgs_api.Interfaces;
-using kgs_api.Models;
+using kgs_api.Repositories;
 using kgs_api.Services;
+using kgs_api.Storage;
 using kgs_api.Utility;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using NetTopologySuite;
 using System.Text;
+using static kgs_api.Common.Common;
 
 namespace kgs_api.Extensions
 {
@@ -18,19 +23,50 @@ namespace kgs_api.Extensions
         {
             var connectionString = config.GetConnectionString("PostgresDb") ?? throw new InvalidOperationException("Connection string 'PostgresDb' not found.");
 
+            services.AddDbContext<ApplicationDbContext>(options =>
+                options.UseNpgsql(connectionString, o => o.UseNetTopologySuite()));
+
+            services.AddHttpContextAccessor();
+
+            services.AddSingleton(NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326));
+
             // Database
-            services.AddDbContext<KgsDbContext>(options => options.UseNpgsql(connectionString));
+            services.AddDbContext<ApplicationDbContext>(options => options.UseNpgsql(connectionString));
 
             // Token Provider Tool
             services.AddDataProtection();
 
             services.AddIdentityCore<ApplicationUser>()
                 .AddRoles<IdentityRole>()
-                .AddEntityFrameworkStores<KgsDbContext>()
+                .AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddDefaultTokenProviders();
 
-            services.AddScoped<IDbInitial, DbInitializer>();
+            //Đăng ký DI
+            services.AddScoped<ICurrentUserService, CurrentUserService>();
+            services.AddScoped(typeof(IRepository<>), typeof(EfRepository<>));
+            services.AddScoped<IUnitOfWork, EfUnitOfWork>();
 
+            services.Configure<CloudinarySettings>(config.GetSection("CloudinarySettings"));
+            services.AddScoped<IFileStorageService, CloudinaryFileStorageService>();
+
+
+            services.AddScoped<IAssetService, AssetService>();
+            services.AddScoped<IAssetMediaService, AssetMediaService>();
+            services.AddScoped<IAssetDocumentService, AssetDocumentService>();
+            services.AddScoped<IAssetUnitService, AssetUnitService>();
+            services.AddScoped<IContactPartyService, ContactPartyService>();
+            services.AddScoped<ILeaseContractService, LeaseContractService>();
+            services.AddScoped<ICashFlowService, CashFlowService>();
+            services.AddScoped<IReportService, ReportService>();
+            services.AddScoped<IReminderService, ReminderService>();
+            services.AddScoped<IEquipmentService, EquipmentService>();
+            services.AddScoped<IMaintenanceService, MaintenanceService>();
+            services.AddScoped<IUsagePeriodService, UsagePeriodService>();
+            services.AddScoped<ISaleListingService, SaleListingService>();
+            services.AddScoped<INotificationSender, LoggingNotificationSender>(); // thay bằng FCM/APNs sau
+
+           
+            //___
             services.AddControllers();
             services.AddHttpClient();
             services.AddCors();
@@ -63,6 +99,20 @@ namespace kgs_api.Extensions
                         ValidateAudience = false
                     };
                 });
+
+            services.AddHangfire(configuration =>
+                configuration
+                    .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
+                    .UseSimpleAssemblyNameTypeSerializer()
+                    .UseRecommendedSerializerSettings()
+                    .UsePostgreSqlStorage(c => c.UseNpgsqlConnection(connectionString)));
+
+            // Thêm Hangfire Server
+            services.AddHangfireServer();
+
+            // Đăng ký các background job
+            services.AddScoped<ReminderProcessingJob>();
+            services.AddScoped<FileCleanupJob>();
 
             return services;
         }
