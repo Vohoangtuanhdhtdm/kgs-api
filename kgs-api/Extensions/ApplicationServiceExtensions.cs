@@ -19,10 +19,11 @@ namespace kgs_api.Extensions
 {
     public static class ApplicationServiceExtensions
     {
-        public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration config)
+        public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration config, IWebHostEnvironment env)
         {
             var connectionString = config.GetConnectionString("PostgresDb") ?? throw new InvalidOperationException("Connection string 'PostgresDb' not found.");
 
+            // Database
             services.AddDbContext<ApplicationDbContext>(options =>
                 options.UseNpgsql(connectionString, o => o.UseNetTopologySuite()));
 
@@ -30,16 +31,37 @@ namespace kgs_api.Extensions
 
             services.AddSingleton(NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326));
 
-            // Database
-            services.AddDbContext<ApplicationDbContext>(options => options.UseNpgsql(connectionString));
-
             // Token Provider Tool
             services.AddDataProtection();
+            services.AddScoped<RefreshTokenCleanupJob>();
 
-            services.AddIdentityCore<ApplicationUser>()
+            // Identity
+            services.AddIdentityCore<ApplicationUser>(options =>
+            {
+                // Mật khẩu
+                options.Password.RequiredLength = 8;
+                options.Password.RequireDigit = true;
+                options.Password.RequireLowercase = true;
+                options.Password.RequireUppercase = false;      // nới lỏng cho dễ dùng ở VN
+                options.Password.RequireNonAlphanumeric = false;
+
+                // Khoá tài khoản khi sai mật khẩu nhiều lần — chống brute force
+                options.Lockout.MaxFailedAccessAttempts = 5;
+                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+                options.Lockout.AllowedForNewUsers = true;
+
+                // Email là duy nhất
+                options.User.RequireUniqueEmail = true;
+
+                // Bắt buộc xác thực email mới đăng nhập được (điều khiển qua AuthSettings ở tầng service)
+                options.SignIn.RequireConfirmedEmail = false;
+            })
                 .AddRoles<IdentityRole>()
                 .AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddDefaultTokenProviders();
+
+            services.Configure<AuthSettings>(config.GetSection("AuthSettings"));
+            services.AddScoped<IAuthService, AuthService>();
 
             //Đăng ký DI
             services.AddScoped<ICurrentUserService, CurrentUserService>();
@@ -49,6 +71,12 @@ namespace kgs_api.Extensions
             services.Configure<CloudinarySettings>(config.GetSection("CloudinarySettings"));
             services.AddScoped<IFileStorageService, CloudinaryFileStorageService>();
 
+            // mail-server
+            services.Configure<SmtpSettings>(config.GetSection("SmtpSettings"));
+            if (env.IsDevelopment())
+                services.AddScoped<IEmailSender, ConsoleEmailSender>();
+            else
+                services.AddScoped<IEmailSender, SmtpEmailSender>();
 
             services.AddScoped<IAssetService, AssetService>();
             services.AddScoped<IAssetMediaService, AssetMediaService>();
@@ -74,9 +102,6 @@ namespace kgs_api.Extensions
             // Services
             services.AddScoped<ITokenService, TokenService>();
 
-            // Đọc cấu hình từ appsettings map vào class CloudinarySettings
-            services.Configure<CloudinarySettings>(config.GetSection("CloudinarySettings"));
-
             // Đăng ký PhotoService
             services.AddScoped<IPhotoService, PhotoService>();
 
@@ -96,7 +121,9 @@ namespace kgs_api.Extensions
                         ValidateIssuerSigningKey = true,
                         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
                         ValidateIssuer = false,
-                        ValidateAudience = false
+                        ValidateAudience = false,
+                        ValidateLifetime = true,
+                        ClockSkew = TimeSpan.Zero        // mặc định là 5 phút — token sẽ sống lâu hơn expires 5'
                     };
                 });
 
@@ -113,6 +140,8 @@ namespace kgs_api.Extensions
             // Đăng ký các background job
             services.AddScoped<ReminderProcessingJob>();
             services.AddScoped<FileCleanupJob>();
+
+           
 
             return services;
         }

@@ -181,7 +181,6 @@ namespace kgs_api.Services
             var to = DateTime.SpecifyKind(query.To, DateTimeKind.Utc);
             if (to <= from) throw new ValidationFailedException("Khoảng thời gian không hợp lệ.");
 
-            // Index (UserId, Category, OccurredAt) → index-seek, GROUP BY chạy trong PostgreSQL
             var q = _entries.Query().AsNoTracking()
                 .Where(e => e.UserId == _currentUser.UserId
                          && e.Category == CashFlowCategory.RentIncome
@@ -190,11 +189,17 @@ namespace kgs_api.Services
             if (query.AssetId is not null)
                 q = q.Where(e => e.AssetId == query.AssetId);
 
-            var byMonth = await q
+            // Bước 1 — group + sum, CHỈ trả kiểu vô danh nguyên thuỷ, dịch SQL được
+            var grouped = await q
                 .GroupBy(e => new { e.OccurredAt.Year, e.OccurredAt.Month })
-                .Select(g => new MonthlyAmountDto(g.Key.Year, g.Key.Month, g.Sum(x => x.Amount)))
+                .Select(g => new { g.Key.Year, g.Key.Month, Amount = g.Sum(x => x.Amount) })
+                .ToListAsync(ct);   // ← SQL chạy TỚI ĐÂY, dữ liệu đã về RAM
+
+            // Bước 2 — map sang DTO + sắp xếp bằng LINQ-to-Objects (không còn là SQL)
+            var byMonth = grouped
                 .OrderBy(m => m.Year).ThenBy(m => m.Month)
-                .ToListAsync(ct);
+                .Select(m => new MonthlyAmountDto(m.Year, m.Month, m.Amount))
+                .ToList();
 
             return new IncomeReportDto(from, to, byMonth.Sum(m => m.Amount), byMonth);
         }
@@ -241,17 +246,21 @@ namespace kgs_api.Services
             var from = new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Utc);
             var to = from.AddYears(1);
 
-            // Các category thuế nằm trong dải 20..29 (xem CashFlowCategory) —
-            // so sánh dải nhanh hơn danh sách IN dài, và tự bao phủ loại thuế thêm mới sau này.
-            var byType = await _entries.Query().AsNoTracking()
+            // Bước 1 — group + sum, kiểu vô danh nguyên thuỷ
+            var grouped = await _entries.Query().AsNoTracking()
                 .Where(e => e.UserId == _currentUser.UserId
                          && e.Category >= CashFlowCategory.RegistrationTax
                          && e.Category <= CashFlowCategory.OtherTax
                          && e.OccurredAt >= from && e.OccurredAt < to)
                 .GroupBy(e => e.Category)
-                .Select(g => new CategoryAmountDto(g.Key, g.Sum(x => x.Amount)))
+                .Select(g => new { Category = g.Key, Amount = g.Sum(x => x.Amount) })
+                .ToListAsync(ct);   // ← SQL chạy TỚI ĐÂY
+
+            // Bước 2 — map + sắp xếp trong C#
+            var byType = grouped
                 .OrderByDescending(x => x.Amount)
-                .ToListAsync(ct);
+                .Select(x => new CategoryAmountDto(x.Category, x.Amount))
+                .ToList();
 
             return new TaxReportDto(year, byType.Sum(x => x.Amount), byType);
         }

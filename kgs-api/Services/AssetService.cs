@@ -117,22 +117,42 @@ namespace kgs_api.Services
         {
             var userId = _currentUser.UserId;
 
-            var dto = await _assets.Query().AsNoTracking()
+            // Lấy Location nguyên object (Point) — KHÔNG tách .X/.Y trong Select này
+            var raw = await _assets.Query().AsNoTracking()
                 .Where(a => a.Id == assetId && a.UserId == userId)
-                .Select(a => new AssetDetailDto(
-                    a.Id, a.Name, a.TypeProperty, a.OwnershipType, a.Status,
-                    new AddressDto(a.Address.City, a.Address.District, a.Address.Ward, a.Address.Detail),
-                    a.Location == null ? null : new GeoPointDto(a.Location.Y, a.Location.X), // Y=lat, X=lng
-                    a.Area, a.CurrentValue, a.AcquisitionDate, a.Notes,
-                    a.Thumbnail == null ? null
-                        : new StoredFileDto(a.Thumbnail.Url, a.Thumbnail.FileName, a.Thumbnail.ContentType, a.Thumbnail.SizeBytes),
+                .Select(a => new
+                {
+                    a.Id,
+                    a.Name,
+                    a.TypeProperty,
+                    a.OwnershipType,
+                    a.Status,
+                    a.Address,
+                    a.Location,
+                    a.Area,
+                    a.CurrentValue,
+                    a.AcquisitionDate,
+                    a.Notes,
+                    a.Thumbnail,
                     a.LinkedPropertyId,
-                    a.Units.Count,
-                    a.Contracts.Count(c => c.Status == ContractStatus.Active),
-                    a.CreatedAt, a.UpdatedAt))
+                    UnitCount = a.Units.Count,
+                    ActiveContractCount = a.Contracts.Count(c => c.Status == ContractStatus.Active),
+                    a.CreatedAt,
+                    a.UpdatedAt
+                })
                 .FirstOrDefaultAsync(ct);
 
-            return dto ?? throw new NotFoundException("Không tìm thấy tài sản.");
+            if (raw is null) throw new NotFoundException("Không tìm thấy tài sản.");
+
+            // Tách X/Y ở ĐÂY — đã là C# thuần, không còn dịch sang SQL nữa
+            return new AssetDetailDto(
+                raw.Id, raw.Name, raw.TypeProperty, raw.OwnershipType, raw.Status,
+                new AddressDto(raw.Address.City, raw.Address.District, raw.Address.Ward, raw.Address.Detail),
+                raw.Location is null ? null : new GeoPointDto(raw.Location.Y, raw.Location.X), // Y=lat, X=lng
+                raw.Area, raw.CurrentValue, raw.AcquisitionDate, raw.Notes,
+                raw.Thumbnail is null ? null
+                    : new StoredFileDto(raw.Thumbnail.Url, raw.Thumbnail.FileName, raw.Thumbnail.ContentType, raw.Thumbnail.SizeBytes),
+                raw.LinkedPropertyId, raw.UnitCount, raw.ActiveContractCount, raw.CreatedAt, raw.UpdatedAt);
         }
 
         public async Task<PagedResult<AssetSummaryDto>> SearchAsync(AssetSearchQuery query, CancellationToken ct = default)
@@ -173,22 +193,31 @@ namespace kgs_api.Services
 
         public async Task<IReadOnlyList<AssetNearbyDto>> FindNearbyAsync(NearbyQuery query, CancellationToken ct = default)
         {
-            // LƯU Ý: Coordinate(X = longitude, Y = latitude)
             var origin = _geometryFactory.CreatePoint(new Coordinate(query.Longitude, query.Latitude));
 
-            // Với cột geography: IsWithinDistance → ST_DWithin (theo MÉT, dùng GiST index),
-            // Distance → ST_Distance (mét). Toàn bộ chạy trong PostgreSQL, không kéo dữ liệu về app.
-            return await _assets.Query().AsNoTracking()
+            // Distance()/IsWithinDistance() dịch được sang ST_Distance/ST_DWithin cho geography — giữ nguyên trong Select
+            var rows = await _assets.Query().AsNoTracking()
                 .Where(a => a.UserId == _currentUser.UserId
                          && a.Location != null
                          && a.Location.IsWithinDistance(origin, query.RadiusMeters))
                 .OrderBy(a => a.Location!.Distance(origin))
                 .Take(Math.Clamp(query.Limit, 1, 100))
-                .Select(a => new AssetNearbyDto(
-                    a.Id, a.Name, a.TypeProperty, a.Status,
-                    a.Location!.Y, a.Location.X,
-                    a.Location.Distance(origin)))
+                .Select(a => new
+                {
+                    a.Id,
+                    a.Name,
+                    a.TypeProperty,
+                    a.Status,
+                    a.Location,                              // lấy nguyên Point, không tách X/Y ở đây
+                    DistanceMeters = a.Location!.Distance(origin)
+                })
                 .ToListAsync(ct);
+
+            // Tách X/Y sau khi đã materialize
+            return rows.Select(r => new AssetNearbyDto(
+                    r.Id, r.Name, r.TypeProperty, r.Status,
+                    r.Location!.Y, r.Location.X, r.DistanceMeters))
+                .ToList();
         }
 
         // -------------------- A3. LINK PROPERTY --------------------
