@@ -11,7 +11,7 @@ namespace kgs_api.Data
         {
         }
         public DbSet<FileDeletionQueueItem> FileDeletionQueueItems => Set<FileDeletionQueueItem>();
-
+        public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
         public DbSet<Property> Properties => Set<Property>();
         public DbSet<PropertyImages> PropertyImages => Set<PropertyImages>();
         public DbSet<Asset> Assets => Set<Asset>();

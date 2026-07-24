@@ -20,6 +20,8 @@ namespace kgs_api.Services
         Task<IReadOnlyList<AssetMediaDto>> GetGalleryAsync(Guid assetId, CancellationToken ct = default);
         Task DeleteAsync(Guid assetId, Guid mediaId, CancellationToken ct = default);
         Task SetThumbnailAsync(Guid assetId, IFormFile file, CancellationToken ct = default);
+        /// <summary>Đặt một ảnh gallery làm ảnh đại diện — chỉ copy tham chiếu, không upload lại.</summary>
+        Task SetThumbnailFromMediaAsync(Guid assetId, Guid mediaId, CancellationToken ct = default);
     }
 
     public sealed class AssetMediaService : IAssetMediaService
@@ -84,6 +86,30 @@ namespace kgs_api.Services
             return created.Select(ToDto).ToList();
         }
 
+        public async Task SetThumbnailFromMediaAsync(Guid assetId, Guid mediaId, CancellationToken ct = default)
+        {
+            var asset = await GetOwnedAssetAsync(assetId, ct);   // tracking
+
+            var media = await _media.Query().AsNoTracking()
+                .FirstOrDefaultAsync(m => m.Id == mediaId && m.AssetId == assetId, ct)
+                ?? throw new NotFoundException("Không tìm thấy ảnh.");
+
+            // Xoá file thumbnail CŨ trên Cloudinary — nhưng CHỈ khi nó không
+            // được ảnh gallery nào dùng chung (xem cạm bẫy (1) ở đầu file)
+            await ScheduleOldThumbnailDeletionIfSafeAsync(asset, ct);
+
+            // Copy THAM CHIẾU — cùng PublicId, không tạo file mới trên Cloudinary
+            asset.Thumbnail = new StoredFile
+            {
+                Url = media.File.Url,
+                PublicId = media.File.PublicId,
+                FileName = media.File.FileName,
+                ContentType = media.File.ContentType,
+                SizeBytes = media.File.SizeBytes
+            };
+
+            await _uow.SaveChangesAsync(ct);
+        }
         public async Task<IReadOnlyList<AssetMediaDto>> GetGalleryAsync(Guid assetId, CancellationToken ct = default)
         {
             await GetOwnedAssetAsync(assetId, ct);
@@ -99,11 +125,15 @@ namespace kgs_api.Services
 
         public async Task DeleteAsync(Guid assetId, Guid mediaId, CancellationToken ct = default)
         {
-            await GetOwnedAssetAsync(assetId, ct);
+            var asset = await GetOwnedAssetAsync(assetId, ct);   // tracking — cần để clear thumbnail
 
             var media = await _media.Query()
                 .FirstOrDefaultAsync(m => m.Id == mediaId && m.AssetId == assetId, ct)
                 ?? throw new NotFoundException("Không tìm thấy ảnh.");
+
+            // ← THÊM đoạn này: ảnh sắp xoá đang được dùng làm thumbnail?
+            if (asset.Thumbnail?.PublicId == media.File.PublicId)
+                asset.Thumbnail = null;   // clear tham chiếu — file sẽ bị xoá ngay bên dưới
 
             _files.ScheduleDeletion(media.File);   // cùng transaction
             _media.Remove(media);
@@ -115,7 +145,7 @@ namespace kgs_api.Services
             var asset = await GetOwnedAssetAsync(assetId, ct);
 
             var newThumbnail = await _files.UploadImageAsync(file, folder: $"assets/{assetId}", ct);
-            _files.ScheduleDeletion(asset.Thumbnail); // xoá thumbnail cũ (nếu có)
+            await ScheduleOldThumbnailDeletionIfSafeAsync(asset, ct);   // ← ĐỔI dòng này
             asset.Thumbnail = newThumbnail;
 
             await _uow.SaveChangesAsync(ct);
@@ -126,6 +156,22 @@ namespace kgs_api.Services
                    .FirstOrDefaultAsync(a => a.Id == assetId && a.UserId == _currentUser.UserId, ct)
                ?? throw new NotFoundException("Không tìm thấy tài sản.");
 
+        // ==================== HELPER MỚI ====================
+
+        /// <summary>Đưa thumbnail cũ vào hàng đợi xoá Cloudinary, TRỪ KHI PublicId của nó
+        /// vẫn đang được một ảnh gallery của asset này dùng (file dùng chung — xoá sẽ làm chết ảnh gallery).</summary>
+        private async Task ScheduleOldThumbnailDeletionIfSafeAsync(Asset asset, CancellationToken ct)
+        {
+            var old = asset.Thumbnail;
+            if (old is null || string.IsNullOrEmpty(old.PublicId)) return;
+
+            var sharedWithGallery = await _media.Query()
+                .AnyAsync(m => m.AssetId == asset.Id && m.File.PublicId == old.PublicId, ct);
+
+            if (!sharedWithGallery)
+                _files.ScheduleDeletion(old);
+            // Nếu shared: chỉ ghi đè tham chiếu, file vật lý vẫn thuộc về ảnh gallery
+        }
         private static DateTime? EnsureUtc(DateTime? d)
             => d is null ? null : DateTime.SpecifyKind(d.Value, DateTimeKind.Utc);
 
