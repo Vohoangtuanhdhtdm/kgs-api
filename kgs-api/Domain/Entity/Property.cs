@@ -59,5 +59,15 @@ namespace kgs_api.Domain.Entity
         [ForeignKey("UserId")]
         public ApplicationUser User { get; set; } = null!; // liên kết với bảng AspNetUsers
 
+        public ListingType Type { get; set; } = ListingType.Sale;
+
+        // Chỉ có giá trị khi Type = Rent — tái dùng enum PaymentCycle đã có sẵn ở LeaseContract
+        public PaymentCycle? RentPaymentCycle { get; set; }
+
+        // URL thân thiện, VD: "nha-pho-quan-7-a1b2c3" — tránh lộ ID số nguyên tuần tự
+        [MaxLength(300)] public string? Slug { get; set; }
+
+        public int ViewCount { get; set; }
+
     }
 }

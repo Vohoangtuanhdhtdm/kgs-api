@@ -304,6 +304,12 @@ namespace kgs_api.Dtos
         Guid Id, Guid AssetId, decimal AskingPrice, SaleListingStatus Status,
         DateTime ListedAt, string? AgreementNotes, IReadOnlyList<SaleListingBrokerDto> Brokers);
 
+    public sealed record MySaleListingDto(
+        Guid Id, Guid AssetId, string AssetName, string AssetCity, string AssetDistrict,
+        string? AssetThumbnailUrl,
+        decimal AskingPrice, SaleListingStatus Status, DateTime ListedAt, string? AgreementNotes,
+        IReadOnlyList<SaleListingBrokerDto> Brokers);
+
     public sealed record SaleListingBrokerDto(Guid BrokerId, string BrokerName, string? Phone, DateTime SentAt, string? Notes);
 
 }

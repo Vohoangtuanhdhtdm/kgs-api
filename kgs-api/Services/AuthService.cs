@@ -1,13 +1,14 @@
-﻿using kgs_api.Data;
+﻿using Google.Apis.Auth;
+using kgs_api.Data;
 using kgs_api.Domain.Entity;
 using kgs_api.Dtos.Auth;
 using kgs_api.Interfaces;
 using kgs_api.Utility;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using System.Text;
-using Microsoft.EntityFrameworkCore;
 using System.Web;
 using static kgs_api.Common.Common;
 
@@ -22,13 +23,19 @@ namespace kgs_api.Services
         private readonly AuthSettings _settings;
         private readonly ILogger<AuthService> _logger;
 
+        private readonly GoogleAuthSettings _googleSettings;
+        private readonly IHttpClientFactory _httpClientFactory;
+
         public AuthService(
             UserManager<ApplicationUser> userManager,
             ITokenService tokenService,
             IEmailSender emailSender,
             ApplicationDbContext db,
             IOptions<AuthSettings> settings,
-            ILogger<AuthService> logger)
+            ILogger<AuthService> logger,
+            IOptions<GoogleAuthSettings> googleSettings,
+            IHttpClientFactory httpClientFactory
+            )
         {
             _userManager = userManager;
             _tokenService = tokenService;
@@ -36,6 +43,8 @@ namespace kgs_api.Services
             _db = db;
             _settings = settings.Value;
             _logger = logger;
+            _googleSettings = googleSettings.Value;       
+            _httpClientFactory = httpClientFactory;
         }
 
         // ==================== ĐĂNG KÝ ====================
@@ -244,6 +253,60 @@ namespace kgs_api.Services
             return await GetCurrentUserAsync(userId, ct);
         }
 
+        // ====================== Google OAuth ======================
+
+        /// <summary>Đăng nhập bằng Google. Nếu email chưa từng đăng ký, tự tạo tài khoản
+        /// mới (EmailConfirmed = true luôn, vì nhà cung cấp đã xác thực email). Nếu email đã tồn tại
+        /// (kể cả từng đăng ký bằng mật khẩu thường), tự động đăng nhập vào ĐÚNG tài khoản đó.</summary>
+        public async Task<AuthResponse> ExternalLoginAsync(ExternalLoginRequest request, string? ip, CancellationToken ct = default)
+        {
+            var (email, name, avatarUrl, emailVerified) = request.Provider.Trim().ToLowerInvariant() switch
+            {
+                "google" => await VerifyGoogleTokenAsync(request.Token),
+                _ => throw new ValidationFailedException($"Provider '{request.Provider}' không được hỗ trợ.")
+            };
+
+            if (!emailVerified || string.IsNullOrEmpty(email))
+                throw new ValidationFailedException(
+                    "Không lấy được email đã xác thực từ nhà cung cấp. Vui lòng cấp quyền chia sẻ email hoặc đăng ký bằng email/mật khẩu.");
+
+            email = email.Trim().ToLowerInvariant();   // nhất quán với cách RegisterAsync/LoginAsync chuẩn hoá email
+
+            var user = await _userManager.FindByEmailAsync(email);
+
+            if (user is null)
+            {
+                // Chưa từng có tài khoản — tạo mới, KHÔNG cần password (chỉ đăng nhập qua OAuth từ giờ)
+                user = new ApplicationUser
+                {
+                    Email = email,
+                    UserName = email,
+                    Name = string.IsNullOrWhiteSpace(name) ? email : name,
+                    AvatarUrl = avatarUrl,
+                    EmailConfirmed = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                var createResult = await _userManager.CreateAsync(user);
+                if (!createResult.Succeeded)
+                    throw new ValidationFailedException(string.Join("; ", createResult.Errors.Select(e => e.Description)));
+
+                await _userManager.AddToRoleAsync(user, "User");
+
+                _logger.LogInformation("Tạo tài khoản mới qua {Provider}: {Email}", request.Provider, email);
+            }
+            else if (!user.EmailConfirmed)
+            {
+                // Tài khoản cũ đăng ký bằng email/password nhưng chưa xác thực — đăng nhập
+                // Google/Facebook bằng đúng email này coi như xác thực luôn.
+                user.EmailConfirmed = true;
+                await _userManager.UpdateAsync(user);
+            }
+
+            return await BuildAuthResponseAsync(user, ip, ct);
+        }
+
+
         // ==================== HELPERS ====================
 
         private async Task<AuthResponse> BuildAuthResponseAsync(
@@ -308,5 +371,29 @@ namespace kgs_api.Services
                 throw new ValidationFailedException("Token không hợp lệ.");
             }
         }
+
+        // ---------- Helper: verify Google ID token ----------
+
+        private async Task<(string? Email, string? Name, string? AvatarUrl, bool EmailVerified)> VerifyGoogleTokenAsync(string idToken)
+        {
+            try
+            {
+                var payload = await GoogleJsonWebSignature.ValidateAsync(idToken, new GoogleJsonWebSignature.ValidationSettings
+                {
+                    Audience = new[] { _googleSettings.ClientId }   // BẮT BUỘC — chặn token cấp cho app khác
+                });
+
+                return (payload.Email, payload.Name, payload.Picture, payload.EmailVerified);
+            }
+            catch (InvalidJwtException ex)
+            {
+                _logger.LogWarning(ex, "Token Google không hợp lệ");
+                throw new ValidationFailedException($"Token Google không hợp lệ: {ex.Message}");
+            }
+        }
+
+
+
+
     }
 }

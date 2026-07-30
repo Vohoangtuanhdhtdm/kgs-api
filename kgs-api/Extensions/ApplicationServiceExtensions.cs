@@ -68,15 +68,19 @@ namespace kgs_api.Extensions
             services.AddScoped(typeof(IRepository<>), typeof(EfRepository<>));
             services.AddScoped<IUnitOfWork, EfUnitOfWork>();
 
+            services.AddScoped<IPropertyListingService, PropertyListingService>();
+          
+
+
             services.Configure<CloudinarySettings>(config.GetSection("CloudinarySettings"));
             services.AddScoped<IFileStorageService, CloudinaryFileStorageService>();
 
             // mail-server
             services.Configure<SmtpSettings>(config.GetSection("SmtpSettings"));
-            if (env.IsDevelopment())
-                services.AddScoped<IEmailSender, ConsoleEmailSender>();
-            else
-                services.AddScoped<IEmailSender, SmtpEmailSender>();
+            //if (env.IsDevelopment())
+            //    services.AddScoped<IEmailSender, ConsoleEmailSender>();
+            //else
+            services.AddScoped<IEmailSender, SmtpEmailSender>();
 
             services.AddScoped<IAssetService, AssetService>();
             services.AddScoped<IAssetMediaService, AssetMediaService>();
@@ -91,9 +95,10 @@ namespace kgs_api.Extensions
             services.AddScoped<IMaintenanceService, MaintenanceService>();
             services.AddScoped<IUsagePeriodService, UsagePeriodService>();
             services.AddScoped<ISaleListingService, SaleListingService>();
-            services.AddScoped<INotificationSender, LoggingNotificationSender>(); // thay bằng FCM/APNs sau
+            services.AddScoped<INotificationSender, EmailNotificationSender>();
+            services.Configure<GoogleAuthSettings>(config.GetSection("GoogleAuth"));
 
-           
+
             //___
             services.AddControllers();
             services.AddHttpClient();

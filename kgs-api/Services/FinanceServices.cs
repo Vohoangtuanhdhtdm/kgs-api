@@ -7,19 +7,10 @@ using kgs_api.Repositories;
 using static kgs_api.Common.Common;
 using static kgs_api.Domain.Enums;
 using kgs_api.Storage;
+using kgs_api.Interfaces;
 
 namespace kgs_api.Services
 {
-    // ============================================================
-    // C1 — SỔ CÁI THU/CHI
-    // ============================================================
-    public interface ICashFlowService
-    {
-        Task<CashFlowDto> CreateAsync(CashFlowCreateRequest request, CancellationToken ct = default);
-        Task<KeysetPage<CashFlowDto>> ListAsync(CashFlowQuery query, CancellationToken ct = default);
-        Task DeleteAsync(Guid entryId, CancellationToken ct = default);
-    }
-
     public sealed class CashFlowService : ICashFlowService
     {
         private readonly IRepository<Asset> _assets;
@@ -148,21 +139,7 @@ namespace kgs_api.Services
         private static DateTime? SpecifyUtc(DateTime? d)
             => d is null ? null : DateTime.SpecifyKind(d.Value, DateTimeKind.Utc);
     }
-
-    // ============================================================
-    // C2–C4 — BÁO CÁO (chỉ đọc, GROUP BY trên sổ cái)
-    // ============================================================
-    public interface IReportService
-    {
-        /// <summary>C2 — Tổng thu nhập cho thuê theo khoảng thời gian tự chọn, group theo tháng.</summary>
-        Task<IncomeReportDto> GetIncomeReportAsync(IncomeReportQuery query, CancellationToken ct = default);
-
-        /// <summary>C3 — Lợi nhuận của MỘT tài sản: thu − chi + breakdown theo loại.</summary>
-        Task<ProfitReportDto> GetProfitReportAsync(ProfitReportQuery query, CancellationToken ct = default);
-
-        /// <summary>C4 — Tổng thuế phải nộp theo năm, chia theo từng loại thuế.</summary>
-        Task<TaxReportDto> GetTaxReportAsync(int year, CancellationToken ct = default);
-    }
+    
 
     public sealed class ReportService : IReportService
     {

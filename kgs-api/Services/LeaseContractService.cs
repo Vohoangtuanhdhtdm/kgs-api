@@ -1,6 +1,7 @@
 ﻿using kgs_api.Domain.Entity;
 using kgs_api.Domain.Entity.SubEntity;
 using kgs_api.Dtos;
+using kgs_api.Interfaces;
 using kgs_api.Repositories;
 using Microsoft.EntityFrameworkCore;   
 using static kgs_api.Common.Common;
@@ -8,16 +9,6 @@ using static kgs_api.Domain.Enums;
 
 namespace kgs_api.Services
 {
-    public interface ILeaseContractService
-    {
-        Task<LeaseContractDto> CreateAsync(LeaseContractCreateRequest request, CancellationToken ct = default);
-        Task<LeaseContractDto> RenewAsync(Guid contractId, LeaseContractRenewRequest request, CancellationToken ct = default);
-        Task TerminateAsync(Guid contractId, LeaseContractTerminateRequest request, CancellationToken ct = default);
-        Task<LeaseContractDto> GetByIdAsync(Guid contractId, CancellationToken ct = default);
-        Task<PagedResult<LeaseContractDto>> SearchAsync(LeaseContractSearchQuery query, CancellationToken ct = default);
-        Task<IReadOnlyList<ExpiringContractDto>> GetExpiringAsync(int withinDays, CancellationToken ct = default);
-    }
-
     public sealed class LeaseContractService : ILeaseContractService
     {
         private readonly IRepository<Asset> _assets;

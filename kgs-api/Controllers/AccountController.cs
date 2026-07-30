@@ -1,5 +1,6 @@
 ﻿using kgs_api.Dtos.Auth;
 using kgs_api.Interfaces;
+using kgs_api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using static kgs_api.Common.Common;
@@ -38,6 +39,15 @@ namespace kgs_api.Controllers
             [FromBody] LoginRequest request, CancellationToken ct)
         {
             var result = await _auth.LoginAsync(request, GetIpAddress(), ct);
+            return Ok(result);
+        }
+
+        [HttpPost("external-login")]
+        [AllowAnonymous]
+        public async Task<ActionResult<AuthResponse>> ExternalLogin( [FromBody] ExternalLoginRequest request, CancellationToken ct)
+        {
+            var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+            var result = await _auth.ExternalLoginAsync(request, ip, ct);
             return Ok(result);
         }
 
