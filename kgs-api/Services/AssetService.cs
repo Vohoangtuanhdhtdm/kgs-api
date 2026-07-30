@@ -1,6 +1,7 @@
 ﻿using kgs_api.Domain.Entity;
 using kgs_api.Domain.ValueObjects;
 using kgs_api.Dtos;
+using kgs_api.Interfaces;
 using kgs_api.Repositories;
 using kgs_api.Storage;
 using Microsoft.EntityFrameworkCore;
@@ -10,18 +11,6 @@ using static kgs_api.Domain.Enums;
 
 namespace kgs_api.Services
 {
-    public interface IAssetService
-    {
-        Task<AssetDetailDto> CreateAsync(AssetCreateRequest request, CancellationToken ct = default);
-        Task<AssetDetailDto> UpdateAsync(Guid assetId, AssetUpdateRequest request, CancellationToken ct = default);
-        Task DeleteAsync(Guid assetId, CancellationToken ct = default);
-        Task<AssetDetailDto> GetByIdAsync(Guid assetId, CancellationToken ct = default);
-        Task<PagedResult<AssetSummaryDto>> SearchAsync(AssetSearchQuery query, CancellationToken ct = default);
-        Task<IReadOnlyList<AssetNearbyDto>> FindNearbyAsync(NearbyQuery query, CancellationToken ct = default);
-        Task LinkPropertyAsync(Guid assetId, int propertyId, CancellationToken ct = default);
-        Task UnlinkPropertyAsync(Guid assetId, CancellationToken ct = default);
-    }
-
     public sealed class AssetService : IAssetService
     {
         private readonly IRepository<Asset> _assets;

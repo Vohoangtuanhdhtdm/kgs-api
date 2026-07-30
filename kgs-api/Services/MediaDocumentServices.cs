@@ -7,23 +7,10 @@ using Microsoft.EntityFrameworkCore;
 using kgs_api.Storage;
 using static kgs_api.Common.Common;
 using static kgs_api.Domain.Enums;
+using kgs_api.Interfaces;
 
 namespace kgs_api.Services
 {
-
-    // ============================================================
-    // A4 — ẢNH THEO THỜI GIAN
-    // ============================================================
-    public interface IAssetMediaService
-    {
-        Task<IReadOnlyList<AssetMediaDto>> UploadAsync(Guid assetId, AssetMediaUploadRequest request, CancellationToken ct = default);
-        Task<IReadOnlyList<AssetMediaDto>> GetGalleryAsync(Guid assetId, CancellationToken ct = default);
-        Task DeleteAsync(Guid assetId, Guid mediaId, CancellationToken ct = default);
-        Task SetThumbnailAsync(Guid assetId, IFormFile file, CancellationToken ct = default);
-        /// <summary>Đặt một ảnh gallery làm ảnh đại diện — chỉ copy tham chiếu, không upload lại.</summary>
-        Task SetThumbnailFromMediaAsync(Guid assetId, Guid mediaId, CancellationToken ct = default);
-    }
-
     public sealed class AssetMediaService : IAssetMediaService
     {
         private const int MaxFilesPerUpload = 10;
@@ -178,19 +165,6 @@ namespace kgs_api.Services
         private static AssetMediaDto ToDto(AssetMedia m) => new(m.Id,
             new StoredFileDto(m.File.Url, m.File.FileName, m.File.ContentType, m.File.SizeBytes),
             m.Caption, m.TakenAt, m.SortOrder);
-    }
-
-    // ============================================================
-    // A5 — GIẤY TỜ PHÁP LÝ / HỢP ĐỒNG DỊCH VỤ
-    // ============================================================
-    public interface IAssetDocumentService
-    {
-        Task<AssetDocumentDto> UploadAsync(Guid assetId, AssetDocumentUploadRequest request, CancellationToken ct = default);
-        Task<IReadOnlyList<AssetDocumentDto>> GetByAssetAsync(Guid assetId, DocumentType? type, CancellationToken ct = default);
-        Task DeleteAsync(Guid assetId, Guid documentId, CancellationToken ct = default);
-
-        /// <summary>Giấy tờ/hợp đồng dịch vụ sắp hết hạn trong N ngày — trên TOÀN BỘ tài sản của user.</summary>
-        Task<IReadOnlyList<ExpiringDocumentDto>> GetExpiringAsync(int withinDays, CancellationToken ct = default);
     }
 
     public sealed class AssetDocumentService : IAssetDocumentService

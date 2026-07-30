@@ -5,21 +5,10 @@ using kgs_api.Repositories;
 using static kgs_api.Common.Common;
 using Microsoft.EntityFrameworkCore;
 using static kgs_api.Domain.Enums;
+using kgs_api.Interfaces;
 
 namespace kgs_api.Services
 {
-
-    // ============================================================
-    // A6 — TẦNG / PHÒNG
-    // ============================================================
-    public interface IAssetUnitService
-    {
-        Task<AssetUnitDto> CreateAsync(Guid assetId, AssetUnitRequest request, CancellationToken ct = default);
-        Task<AssetUnitDto> UpdateAsync(Guid assetId, Guid unitId, AssetUnitRequest request, CancellationToken ct = default);
-        Task DeleteAsync(Guid assetId, Guid unitId, CancellationToken ct = default);
-        Task<IReadOnlyList<AssetUnitDto>> GetByAssetAsync(Guid assetId, CancellationToken ct = default);
-    }
-
     public sealed class AssetUnitService : IAssetUnitService
     {
         private readonly IRepository<Asset> _assets;
@@ -109,17 +98,6 @@ namespace kgs_api.Services
 
         private static AssetUnitDto ToDto(AssetUnit u)
             => new(u.Id, u.Name, u.FloorNumber, u.Area, u.Status, u.Notes);
-    }
-
-    // ============================================================
-    // B1 — SỔ ĐỐI TÁC (người thuê / chủ nhà / môi giới / nhà thầu)
-    // ============================================================
-    public interface IContactPartyService
-    {
-        Task<ContactPartyDto> CreateAsync(ContactPartyRequest request, CancellationToken ct = default);
-        Task<ContactPartyDto> UpdateAsync(Guid contactId, ContactPartyRequest request, CancellationToken ct = default);
-        Task DeleteAsync(Guid contactId, CancellationToken ct = default);
-        Task<PagedResult<ContactPartyDto>> ListAsync(ContactType? type, string? keyword, int page, int pageSize, CancellationToken ct = default);
     }
 
     public sealed class ContactPartyService : IContactPartyService
@@ -221,17 +199,6 @@ namespace kgs_api.Services
 
         private static ContactPartyDto ToDto(ContactParty c)
             => new(c.Id, c.Type, c.FullName, c.Phone, c.Email, c.IdNumber, c.Notes);
-    }
-
-    // ============================================================
-    // D3 — LỊCH SỬ SỬA CHỮA (tuỳ chọn tự ghi chi phí vào sổ cái)
-    // ============================================================
-    public interface IMaintenanceService
-    {
-        Task<MaintenanceDto> CreateAsync(Guid assetId, MaintenanceRequest request, CancellationToken ct = default);
-        Task<MaintenanceDto> UpdateAsync(Guid assetId, Guid recordId, MaintenanceRequest request, CancellationToken ct = default);
-        Task DeleteAsync(Guid assetId, Guid recordId, CancellationToken ct = default);
-        Task<IReadOnlyList<MaintenanceDto>> GetByAssetAsync(Guid assetId, CancellationToken ct = default);
     }
 
     public sealed class MaintenanceService : IMaintenanceService
@@ -363,17 +330,6 @@ namespace kgs_api.Services
         private static DateTime? UtcNullable(DateTime? d) => d is null ? null : Utc(d.Value);
     }
 
-    // ============================================================
-    // D4 — TRANG THIẾT BỊ
-    // ============================================================
-    public interface IEquipmentService
-    {
-        Task<EquipmentDto> CreateAsync(Guid assetId, EquipmentRequest request, CancellationToken ct = default);
-        Task<EquipmentDto> UpdateAsync(Guid assetId, Guid equipmentId, EquipmentRequest request, CancellationToken ct = default);
-        Task DeleteAsync(Guid assetId, Guid equipmentId, CancellationToken ct = default);
-        Task<IReadOnlyList<EquipmentDto>> GetByAssetAsync(Guid assetId, Guid? unitId, CancellationToken ct = default);
-    }
-
     public sealed class EquipmentService : IEquipmentService
     {
         private readonly IRepository<Asset> _assets;
@@ -456,17 +412,6 @@ namespace kgs_api.Services
 
         private static EquipmentDto ToDto(Equipment e)
             => new(e.Id, e.AssetUnitId, e.Name, e.Quantity, e.Condition, e.Source, e.Notes);
-    }
-
-    // ============================================================
-    // D5 — LỊCH SỬ SỬ DỤNG (bản thân / con cái / người quen)
-    // ============================================================
-    public interface IUsagePeriodService
-    {
-        Task<UsagePeriodDto> CreateAsync(Guid assetId, UsagePeriodRequest request, CancellationToken ct = default);
-        Task<UsagePeriodDto> UpdateAsync(Guid assetId, Guid periodId, UsagePeriodRequest request, CancellationToken ct = default);
-        Task DeleteAsync(Guid assetId, Guid periodId, CancellationToken ct = default);
-        Task<IReadOnlyList<UsagePeriodDto>> GetByAssetAsync(Guid assetId, CancellationToken ct = default);
     }
 
     public sealed class UsagePeriodService : IUsagePeriodService
@@ -559,155 +504,6 @@ namespace kgs_api.Services
 
         private static DateTime Utc(DateTime d) => DateTime.SpecifyKind(d, DateTimeKind.Utc);
         private static DateTime? UtcNullable(DateTime? d) => d is null ? null : Utc(d.Value);
-    }
-
-    // ============================================================
-    // D6 — RAO BÁN + DANH SÁCH MÔI GIỚI ĐÃ GỬI
-    // ============================================================
-    public interface ISaleListingService
-    {
-        Task<SaleListingDto> CreateAsync(Guid assetId, SaleListingCreateRequest request, CancellationToken ct = default);
-        Task<SaleListingDto> UpdateAsync(Guid assetId, SaleListingUpdateRequest request, CancellationToken ct = default);
-        Task<SaleListingDto> GetByAssetAsync(Guid assetId, CancellationToken ct = default);
-        Task<SaleListingDto> AddBrokerAsync(Guid assetId, SaleListingBrokerRequest request, CancellationToken ct = default);
-        Task<SaleListingDto> RemoveBrokerAsync(Guid assetId, Guid brokerId, CancellationToken ct = default);
-        Task MarkSoldAsync(Guid assetId, CancellationToken ct = default);
-    }
-
-    public sealed class SaleListingService : ISaleListingService
-    {
-        private readonly IRepository<Asset> _assets;
-        private readonly IRepository<SaleListing> _listings;
-        private readonly IRepository<SaleListingBroker> _brokers;
-        private readonly IRepository<ContactParty> _contacts;
-        private readonly IUnitOfWork _uow;
-        private readonly ICurrentUserService _currentUser;
-
-        public SaleListingService(IRepository<Asset> assets, IRepository<SaleListing> listings,
-            IRepository<SaleListingBroker> brokers, IRepository<ContactParty> contacts,
-            IUnitOfWork uow, ICurrentUserService currentUser)
-        {
-            _assets = assets; _listings = listings; _brokers = brokers;
-            _contacts = contacts; _uow = uow; _currentUser = currentUser;
-        }
-
-        public async Task<SaleListingDto> CreateAsync(Guid assetId, SaleListingCreateRequest request, CancellationToken ct = default)
-        {
-            var asset = await GetOwnedAssetAsync(assetId, ct);
-
-            var exists = await _listings.Query().AnyAsync(l => l.AssetId == assetId, ct);
-            if (exists)
-                throw new ConflictException("Tài sản đã có thông tin rao bán — hãy cập nhật thay vì tạo mới.");
-
-            var listing = new SaleListing
-            {
-                AssetId = assetId,
-                AskingPrice = request.AskingPrice,
-                Status = SaleListingStatus.Active,
-                ListedAt = DateTime.UtcNow,
-                AgreementNotes = request.AgreementNotes
-            };
-            await _listings.AddAsync(listing, ct);
-
-            asset.Status = AssetStatus.ForSale;
-
-            await _uow.SaveChangesAsync(ct);
-            return await GetByAssetAsync(assetId, ct);
-        }
-
-        public async Task<SaleListingDto> UpdateAsync(Guid assetId, SaleListingUpdateRequest request, CancellationToken ct = default)
-        {
-            await GetOwnedAssetAsync(assetId, ct);
-            var listing = await GetListingAsync(assetId, ct);
-
-            listing.AskingPrice = request.AskingPrice;
-            listing.Status = request.Status;
-            listing.AgreementNotes = request.AgreementNotes;
-
-            await _uow.SaveChangesAsync(ct);
-            return await GetByAssetAsync(assetId, ct);
-        }
-
-        public async Task<SaleListingDto> GetByAssetAsync(Guid assetId, CancellationToken ct = default)
-        {
-            await GetOwnedAssetAsync(assetId, ct);
-
-            var dto = await _listings.Query().AsNoTracking()
-                .Where(l => l.AssetId == assetId)
-                .Select(l => new SaleListingDto(
-                    l.Id, l.AssetId, l.AskingPrice, l.Status, l.ListedAt, l.AgreementNotes,
-                    l.Brokers.OrderBy(b => b.SentAt)
-                        .Select(b => new SaleListingBrokerDto(
-                            b.BrokerId, b.Broker.FullName, b.Broker.Phone, b.SentAt, b.Notes))
-                        .ToList()))
-                .FirstOrDefaultAsync(ct);
-
-            return dto ?? throw new NotFoundException("Tài sản chưa có thông tin rao bán.");
-        }
-
-        public async Task<SaleListingDto> AddBrokerAsync(Guid assetId, SaleListingBrokerRequest request, CancellationToken ct = default)
-        {
-            await GetOwnedAssetAsync(assetId, ct);
-            var listing = await GetListingAsync(assetId, ct);
-
-            var broker = await _contacts.Query()
-                .FirstOrDefaultAsync(c => c.Id == request.BrokerId && c.UserId == _currentUser.UserId, ct)
-                ?? throw new NotFoundException("Không tìm thấy môi giới trong sổ đối tác.");
-            if (broker.Type != ContactType.Broker)
-                throw new ValidationFailedException("Đối tác này không phải môi giới.");
-
-            var already = await _brokers.Query()
-                .AnyAsync(b => b.SaleListingId == listing.Id && b.BrokerId == broker.Id, ct);
-            if (already)
-                throw new ConflictException("Đã gửi tài sản này cho môi giới đó rồi.");
-
-            await _brokers.AddAsync(new SaleListingBroker
-            {
-                SaleListingId = listing.Id,
-                BrokerId = broker.Id,
-                SentAt = DateTime.UtcNow,
-                Notes = request.Notes
-            }, ct);
-
-            await _uow.SaveChangesAsync(ct);
-            return await GetByAssetAsync(assetId, ct);
-        }
-
-        public async Task<SaleListingDto> RemoveBrokerAsync(Guid assetId, Guid brokerId, CancellationToken ct = default)
-        {
-            await GetOwnedAssetAsync(assetId, ct);
-            var listing = await GetListingAsync(assetId, ct);
-
-            var link = await _brokers.Query()
-                .FirstOrDefaultAsync(b => b.SaleListingId == listing.Id && b.BrokerId == brokerId, ct)
-                ?? throw new NotFoundException("Môi giới này chưa được gửi tài sản.");
-
-            _brokers.Remove(link);
-            await _uow.SaveChangesAsync(ct);
-            return await GetByAssetAsync(assetId, ct);
-        }
-
-        public async Task MarkSoldAsync(Guid assetId, CancellationToken ct = default)
-        {
-            var asset = await GetOwnedAssetAsync(assetId, ct);
-            var listing = await GetListingAsync(assetId, ct);
-
-            listing.Status = SaleListingStatus.Sold;
-            asset.Status = AssetStatus.Sold;
-            // Ghi nhận tiền bán (SaleProceeds) là bút toán do user tự nhập qua CashFlow API —
-            // vì số tiền chốt thực tế có thể khác giá rao.
-
-            await _uow.SaveChangesAsync(ct);
-        }
-
-        private async Task<Asset> GetOwnedAssetAsync(Guid assetId, CancellationToken ct)
-            => await _assets.Query()
-                   .FirstOrDefaultAsync(a => a.Id == assetId && a.UserId == _currentUser.UserId, ct)
-               ?? throw new NotFoundException("Không tìm thấy tài sản.");
-
-        private async Task<SaleListing> GetListingAsync(Guid assetId, CancellationToken ct)
-            => await _listings.Query().FirstOrDefaultAsync(l => l.AssetId == assetId, ct)
-               ?? throw new NotFoundException("Tài sản chưa có thông tin rao bán.");
     }
 
 }

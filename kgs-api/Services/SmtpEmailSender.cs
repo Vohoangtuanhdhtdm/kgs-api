@@ -16,6 +16,10 @@ namespace kgs_api.Services
         {
             _settings = settings.Value;
             _logger = logger;
+
+            // ← THÊM — in ra ngay khi khởi động để xác nhận config có đọc được đúng không
+            _logger.LogWarning("SmtpEmailSender khởi tạo với Host={Host} Port={Port} Username={Username} FromEmail={FromEmail}",
+                _settings.Host, _settings.Port, _settings.Username, _settings.FromEmail);
         }
 
         public Task SendEmailConfirmationAsync(string toEmail, string userName, string confirmationLink, CancellationToken ct = default)
@@ -50,30 +54,46 @@ namespace kgs_api.Services
         // ---- Lõi dùng chung cho cả 3 method public ----
         private async Task SendCoreAsync(string toEmail, string subject, string htmlBody, CancellationToken ct)
         {
+
+            // ← THÊM — kiểm tra config có bị rỗng không TRƯỚC khi thử kết nối
+            if (string.IsNullOrWhiteSpace(_settings.Host))
+            {
+                _logger.LogError("SmtpSettings chưa được cấu hình — Host rỗng.");
+               
+            }
+
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress(_settings.FromName, _settings.FromEmail));
             message.To.Add(MailboxAddress.Parse(toEmail));
             message.Subject = subject;
             message.Body = new TextPart(MimeKit.Text.TextFormat.Html) { Text = htmlBody };
-
             using var client = new SmtpClient();
-            try
-            {
-                var socketOptions = _settings.Port == 465
-                    ? SecureSocketOptions.SslOnConnect
-                    : SecureSocketOptions.StartTls;
 
-                await client.ConnectAsync(_settings.Host, _settings.Port, socketOptions, ct);
-                await client.AuthenticateAsync(_settings.Username, _settings.Password, ct);
-                await client.SendAsync(message, ct);
-                await client.DisconnectAsync(true, ct);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Gửi email SMTP thất bại tới {Email} qua {Host}:{Port}",
-                    toEmail, _settings.Host, _settings.Port);
-              
-            }
+            // ← THÊM tạm — bỏ qua lỗi certificate để loại trừ khả năng server PA VN dùng
+            //     self-signed cert cho hostname mail.tenmiencuaban.com (khá phổ biến với
+            //     hosting giá rẻ). CHỈ BẬT LÚC DEBUG — bật ở production là lỗ hổng bảo mật
+            //     (mất khả năng xác minh server, dễ bị man-in-the-middle).
+            client.ServerCertificateValidationCallback = (s, c, h, e) => true;
+
+            _logger.LogWarning("Bắt đầu kết nối SMTP tới {Host}:{Port}...", _settings.Host, _settings.Port);
+
+            // KHÔNG bọc try/catch ở đây — để exception thật ném ra ngoài, thấy rõ trong response
+            // (chỉ tạm thời cho debug; bản chính thức phải nuốt lỗi như patch-1b)
+            var socketOptions = _settings.Port == 465
+                ? SecureSocketOptions.SslOnConnect
+                : SecureSocketOptions.StartTls;
+
+            await client.ConnectAsync(_settings.Host, _settings.Port, socketOptions, ct);
+            _logger.LogWarning("Kết nối SMTP thành công, đang xác thực...");
+
+            await client.AuthenticateAsync(_settings.Username, _settings.Password, ct);
+            _logger.LogWarning("Xác thực SMTP thành công, đang gửi mail tới {ToEmail}...", toEmail);
+
+            await client.SendAsync(message, ct);
+            _logger.LogWarning("Gửi mail thành công!");
+
+            await client.DisconnectAsync(true, ct);
+   
         }
     }
 }

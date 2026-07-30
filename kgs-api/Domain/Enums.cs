@@ -80,5 +80,9 @@
         public enum ContactType { Tenant = 1, Landlord = 2, Broker = 3, Vendor = 4, Other = 99 }
 
         public enum SaleListingStatus { Active = 1, Paused = 2, Sold = 3, Cancelled = 4 }
+
+        // Domain/Enums.cs — MỞ FILE ĐÃ CÓ, thêm dòng này vào bên trong class Enums hiện tại,
+        // cạnh các enum khác (AssetType, ContractStatus...)
+        public enum ListingType { Sale = 1, Rent = 2 }
     }
 }

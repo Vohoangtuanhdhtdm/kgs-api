@@ -19,5 +19,6 @@ namespace kgs_api.Interfaces
 
         Task<CurrentUserDto> GetCurrentUserAsync(string userId, CancellationToken ct = default);
         Task<CurrentUserDto> UpdateProfileAsync(string userId, UpdateProfileRequest request, CancellationToken ct = default);
+        Task<AuthResponse> ExternalLoginAsync(ExternalLoginRequest request, string? ip, CancellationToken ct = default);
     }
 }

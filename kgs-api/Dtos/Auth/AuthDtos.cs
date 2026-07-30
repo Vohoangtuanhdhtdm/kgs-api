@@ -31,6 +31,10 @@ namespace kgs_api.Dtos.Auth
         [Required(ErrorMessage = "Mật khẩu không được để trống")]
         string Password);
 
+    public sealed record ExternalLoginRequest(
+         [Required] string Provider,
+         [Required] string Token);
+
     /// <summary>Trả về sau register/login/refresh. RefreshToken KHÔNG nằm trong body
     /// nếu bạn chọn cách gửi qua HttpOnly cookie (xem ghi chú trong AccountController).</summary>
     public sealed record AuthResponse(

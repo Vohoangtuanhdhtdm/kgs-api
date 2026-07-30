@@ -6,21 +6,12 @@ using kgs_api.Repositories;
 using static kgs_api.Common.Common;
 using static kgs_api.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using kgs_api.Interfaces;
 
 namespace kgs_api.Services
 {
 
-    // ============================================================
-    // D1 — REMINDER CRUD + UPCOMING
-    // ============================================================
-    public interface IReminderService
-    {
-        Task<ReminderDto> CreateAsync(ReminderCreateRequest request, CancellationToken ct = default);
-        Task<ReminderDto> UpdateAsync(Guid reminderId, ReminderUpdateRequest request, CancellationToken ct = default);
-        Task DeleteAsync(Guid reminderId, CancellationToken ct = default);
-        Task<IReadOnlyList<ReminderDto>> GetUpcomingAsync(int withinDays, CancellationToken ct = default);
-        Task<PagedResult<ReminderDto>> ListAsync(bool? isActive, int page, int pageSize, CancellationToken ct = default);
-    }
+    
 
     public sealed class ReminderService : IReminderService
     {
@@ -129,15 +120,7 @@ namespace kgs_api.Services
                 r.Type, r.Title, r.DueDate, r.Cycle, r.NotifyDaysBefore, r.IsActive, r.LastNotifiedAt));
     }
 
-    // ============================================================
-    // D2 — BACKGROUND JOB (Hangfire/Quartz gọi định kỳ, VD mỗi 15 phút)
-    // ============================================================
-
-    /// <summary>Abstraction gửi thông báo — thay bằng FCM/APNs/Email khi tích hợp thật.</summary>
-    public interface INotificationSender
-    {
-        Task SendAsync(string userId, string title, string body, CancellationToken ct = default);
-    }
+    
 
     public sealed class LoggingNotificationSender : INotificationSender
     {
