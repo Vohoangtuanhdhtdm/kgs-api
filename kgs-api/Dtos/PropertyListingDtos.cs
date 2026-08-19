@@ -8,16 +8,15 @@ namespace kgs_api.Dtos
         [Required, MaxLength(200)] string Title,
         [Required] string Description,
         [Range(0.01, (double)decimal.MaxValue)] decimal Price,
-        PaymentCycle? RentPaymentCycle,   // bắt buộc nếu Type = Rent, validate ở service
-        int Floors,
-        int Bedrooms,
-        int Bathrooms,
-        double Frontage,
-        string HouseDirection,
-        string LegalStatus,
-        string FurnitureState,
-        string PropertyType,
-        /// <summary>Chọn ảnh từ AssetMedia đã có sẵn để đăng công khai — không upload lại.</summary>
+        PaymentCycle? RentPaymentCycle,
+        // ← ĐỔI 6 trường này sang nullable — bỏ trống thì backend tự lấy từ Asset
+        int? Floors,
+        int? Bedrooms,
+        int? Bathrooms,
+        double? Frontage,
+        string? HouseDirection,
+        string? LegalStatus,
+        string? FurnitureState,
         List<Guid> SelectedAssetMediaIds);
 
     public sealed record PublicPropertySearchQuery(
@@ -28,13 +27,17 @@ namespace kgs_api.Dtos
         decimal? PriceMax,
         int? BedroomsMin,
         string? Keyword,
+        // ← THÊM 3 tham số mới — đều tuỳ chọn, không phá vỡ cách gọi cũ (lọc theo City/District vẫn dùng được)
+        double? Latitude,
+        double? Longitude,
+        double? RadiusMeters,
         int Page = 1,
         int PageSize = 20);
 
     public sealed record PublicPropertySummaryDto(
         int Id, string Slug, string Title, ListingType Type, decimal Price,
         PaymentCycle? RentPaymentCycle, string City, string District,
-        int Bedrooms, int Bathrooms, double Area, string? ThumbnailUrl);
+        int Bedrooms, int Bathrooms, double Area, string? ThumbnailUrl, double? DistanceMeters);
 
     public sealed record PublicPropertyDetailDto(
         int Id, string Slug, string Title, string Description, ListingType Type,

@@ -4,6 +4,7 @@ using kgs_api.Dtos;
 using kgs_api.Interfaces;
 using kgs_api.Repositories;
 using kgs_api.Storage;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 using static kgs_api.Common.Common;
@@ -52,7 +53,13 @@ namespace kgs_api.Services
                 Area = request.Area,
                 CurrentValue = request.CurrentValue,
                 AcquisitionDate = request.AcquisitionDate,
-                Notes = request.Notes
+                Notes = request.Notes,
+                Floors = request.Floors,
+                Bedrooms = request.Bedrooms,
+                Bathrooms = request.Bathrooms,
+                HouseDirection = request.HouseDirection?.Trim(),
+                LegalStatus = request.LegalStatus?.Trim(),
+                FurnitureState = request.FurnitureState?.Trim()
             };
 
             await _assets.AddAsync(asset, ct);
@@ -73,6 +80,13 @@ namespace kgs_api.Services
             asset.CurrentValue = request.CurrentValue;
             asset.AcquisitionDate = request.AcquisitionDate;
             asset.Notes = request.Notes;
+
+            asset.Floors = request.Floors;
+            asset.Bedrooms = request.Bedrooms;
+            asset.Bathrooms = request.Bathrooms;
+            asset.HouseDirection = request.HouseDirection?.Trim();
+            asset.LegalStatus = request.LegalStatus?.Trim();
+            asset.FurnitureState = request.FurnitureState?.Trim();
 
             await _uow.SaveChangesAsync(ct);
             return await GetByIdAsync(assetId, ct);
@@ -127,7 +141,13 @@ namespace kgs_api.Services
                     UnitCount = a.Units.Count,
                     ActiveContractCount = a.Contracts.Count(c => c.Status == ContractStatus.Active),
                     a.CreatedAt,
-                    a.UpdatedAt
+                    a.UpdatedAt,
+                    a.Floors,
+                    a.Bedrooms,
+                    a.Bathrooms,
+                    a.HouseDirection,
+                    a.LegalStatus,
+                    a.FurnitureState
                 })
                 .FirstOrDefaultAsync(ct);
 
@@ -141,7 +161,8 @@ namespace kgs_api.Services
                 raw.Area, raw.CurrentValue, raw.AcquisitionDate, raw.Notes,
                 raw.Thumbnail is null ? null
                     : new StoredFileDto(raw.Thumbnail.Url, raw.Thumbnail.FileName, raw.Thumbnail.ContentType, raw.Thumbnail.SizeBytes),
-                raw.LinkedPropertyId, raw.UnitCount, raw.ActiveContractCount, raw.CreatedAt, raw.UpdatedAt);
+                raw.LinkedPropertyId, raw.UnitCount, raw.ActiveContractCount, raw.CreatedAt, raw.UpdatedAt, raw.Floors, raw.Bedrooms, raw.Bathrooms,
+                raw.HouseDirection, raw.LegalStatus, raw.FurnitureState);
         }
 
         public async Task<PagedResult<AssetSummaryDto>> SearchAsync(AssetSearchQuery query, CancellationToken ct = default)

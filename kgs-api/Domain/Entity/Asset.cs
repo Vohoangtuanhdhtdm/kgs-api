@@ -27,6 +27,15 @@ namespace kgs_api.Domain.Entity
         public StoredFile? Thumbnail { get; set; }              // thay ThumbnailUrl
         public string? Notes { get; set; }
 
+        // ← THÊM TỪ ĐÂY — 6 trường mô tả chi tiết, dùng cho cả quản lý nội bộ lẫn đăng tin công khai.
+        // Đều nullable vì không phải loại tài sản nào cũng có ý nghĩa (VD: Đất không có phòng ngủ/tắm).
+        public int? Floors { get; set; }
+        public int? Bedrooms { get; set; }
+        public int? Bathrooms { get; set; }
+        public string? HouseDirection { get; set; }    // "Đông Nam", "Tây Bắc"...
+        public string? LegalStatus { get; set; }       // "Sổ hồng riêng", "Đang chờ sổ"...
+        public string? FurnitureState { get; set; }    // "Đầy đủ", "Cơ bản", "Không nội thất"
+
         // Liên kết tin đăng công khai — giữ nguyên từ UserAsset
         public int? LinkedPropertyId { get; set; }
         public Property? LinkedProperty { get; set; }
