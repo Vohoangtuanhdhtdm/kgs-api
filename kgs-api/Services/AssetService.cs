@@ -7,6 +7,7 @@ using kgs_api.Storage;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
+using System.Linq;
 using static kgs_api.Common.Common;
 using static kgs_api.Domain.Enums;
 
@@ -227,6 +228,42 @@ namespace kgs_api.Services
             return rows.Select(r => new AssetNearbyDto(
                     r.Id, r.Name, r.TypeProperty, r.Status,
                     r.Location!.Y, r.Location.X, r.DistanceMeters))
+                .ToList();
+        }
+
+        public async Task<IReadOnlyList<AssetMapPinDto>> GetMapPinsAsync(CancellationToken ct = default)
+        {
+            // ← KHÔNG còn .Where(a => a.Location != null) — trả TẤT CẢ tài sản của user,
+            //   kể cả chưa gắn vị trí (đúng yêu cầu ở docs/api-map-pins.md: "Vẫn phải trả về,
+            //   với latitude/longitude = null. Frontend liệt kê chúng riêng trong overlay
+            //   danh sách kèm nút Bổ sung — bỏ sót là người dùng không biết mình còn tài sản
+            //   chưa gắn vị trí.")
+
+            // Materialize TRƯỚC bằng kiểu vô danh, tách Location.Y/.X SAU — giữ đúng nguyên
+            // tắc đã sửa từ lỗi ST_Y(geography) does not exist ở đầu dự án
+            var raw = await _assets.Query().AsNoTracking()
+                .Where(a => a.UserId == _currentUser.UserId)
+                .Select(a => new
+                {
+                    a.Id,
+                    a.Name,
+                    a.TypeProperty,
+                    a.OwnershipType,
+                    a.Status,
+                    a.Address.City,
+                    a.Address.District,
+                    a.CurrentValue,
+                    ThumbnailUrl = a.Thumbnail == null ? null : a.Thumbnail.Url,
+                    a.LinkedPropertyId,
+                    a.Location   // giữ nguyên object Point?, tách Y/X sau khi đã materialize
+                })
+                .ToListAsync(ct);
+
+            return raw.Select(r => new AssetMapPinDto(
+                r.Id, r.Name, r.TypeProperty, r.OwnershipType, r.Status,
+                r.City, r.District, r.CurrentValue, r.ThumbnailUrl, r.LinkedPropertyId,
+                r.Location?.Y,   // null nếu r.Location null — đúng ý đồ, KHÔNG throw, KHÔNG loại bỏ dòng
+                r.Location?.X))
                 .ToList();
         }
 

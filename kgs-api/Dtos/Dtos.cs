@@ -13,6 +13,19 @@ namespace kgs_api.Dtos
         [Required, MaxLength(100)] string Ward,
         [MaxLength(500)] string Detail);
 
+    public sealed record AssetMapPinDto(
+        Guid Id,
+        string Name,
+        AssetDomainType Type,
+        AssetOwnershipType OwnershipType,
+        AssetStatus Status,
+        string City,
+        string District,
+        decimal? CurrentValue,
+        string? ThumbnailUrl,
+        int? LinkedPropertyId,
+        double? Latitude,    // null nếu tài sản chưa gắn vị trí — KHÔNG loại tài sản này khỏi kết quả
+        double? Longitude);  // null nếu tài sản chưa gắn vị trí
 
 
     /// <summary>Client luôn gửi/nhận lat-lng; chuyển đổi sang NTS Point nằm trong service.</summary>
