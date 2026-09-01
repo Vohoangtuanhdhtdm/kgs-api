@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -12,9 +13,11 @@ using kgs_api.Data;
 namespace kgs_api.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260730082427_Add-Asset-MarketingFields")]
+    partial class AddAssetMarketingFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -403,12 +406,15 @@ namespace kgs_api.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("Latitude")
+                        .HasColumnType("text");
+
                     b.Property<string>("LegalStatus")
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<Point>("Location")
-                        .HasColumnType("geography (point, 4326)");
+                    b.Property<string>("Longitude")
+                        .HasColumnType("text");
 
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(18,2)");
@@ -447,10 +453,6 @@ namespace kgs_api.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("Location");
-
-                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Location"), "gist");
 
                     b.HasIndex("Slug")
                         .IsUnique();

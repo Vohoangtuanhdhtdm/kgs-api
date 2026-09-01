@@ -32,6 +32,9 @@ namespace kgs_api.Data.Configurations
             // URL thân thiện /tin-dang/{slug} — BẮT BUỘC unique, đây là khoá tra cứu chính
             // của trang chi tiết công khai (GetPublicBySlugAsync)
             b.HasIndex(p => p.Slug).IsUnique();
+
+            b.Property(p => p.Location).HasColumnType("geography (point, 4326)");
+            b.HasIndex(p => p.Location).HasMethod("gist");
         }
     }
 }

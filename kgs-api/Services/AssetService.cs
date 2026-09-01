@@ -4,8 +4,10 @@ using kgs_api.Dtos;
 using kgs_api.Interfaces;
 using kgs_api.Repositories;
 using kgs_api.Storage;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
+using System.Linq;
 using static kgs_api.Common.Common;
 using static kgs_api.Domain.Enums;
 
@@ -52,7 +54,13 @@ namespace kgs_api.Services
                 Area = request.Area,
                 CurrentValue = request.CurrentValue,
                 AcquisitionDate = request.AcquisitionDate,
-                Notes = request.Notes
+                Notes = request.Notes,
+                Floors = request.Floors,
+                Bedrooms = request.Bedrooms,
+                Bathrooms = request.Bathrooms,
+                HouseDirection = request.HouseDirection?.Trim(),
+                LegalStatus = request.LegalStatus?.Trim(),
+                FurnitureState = request.FurnitureState?.Trim()
             };
 
             await _assets.AddAsync(asset, ct);
@@ -73,6 +81,13 @@ namespace kgs_api.Services
             asset.CurrentValue = request.CurrentValue;
             asset.AcquisitionDate = request.AcquisitionDate;
             asset.Notes = request.Notes;
+
+            asset.Floors = request.Floors;
+            asset.Bedrooms = request.Bedrooms;
+            asset.Bathrooms = request.Bathrooms;
+            asset.HouseDirection = request.HouseDirection?.Trim();
+            asset.LegalStatus = request.LegalStatus?.Trim();
+            asset.FurnitureState = request.FurnitureState?.Trim();
 
             await _uow.SaveChangesAsync(ct);
             return await GetByIdAsync(assetId, ct);
@@ -127,7 +142,13 @@ namespace kgs_api.Services
                     UnitCount = a.Units.Count,
                     ActiveContractCount = a.Contracts.Count(c => c.Status == ContractStatus.Active),
                     a.CreatedAt,
-                    a.UpdatedAt
+                    a.UpdatedAt,
+                    a.Floors,
+                    a.Bedrooms,
+                    a.Bathrooms,
+                    a.HouseDirection,
+                    a.LegalStatus,
+                    a.FurnitureState
                 })
                 .FirstOrDefaultAsync(ct);
 
@@ -141,7 +162,8 @@ namespace kgs_api.Services
                 raw.Area, raw.CurrentValue, raw.AcquisitionDate, raw.Notes,
                 raw.Thumbnail is null ? null
                     : new StoredFileDto(raw.Thumbnail.Url, raw.Thumbnail.FileName, raw.Thumbnail.ContentType, raw.Thumbnail.SizeBytes),
-                raw.LinkedPropertyId, raw.UnitCount, raw.ActiveContractCount, raw.CreatedAt, raw.UpdatedAt);
+                raw.LinkedPropertyId, raw.UnitCount, raw.ActiveContractCount, raw.CreatedAt, raw.UpdatedAt, raw.Floors, raw.Bedrooms, raw.Bathrooms,
+                raw.HouseDirection, raw.LegalStatus, raw.FurnitureState);
         }
 
         public async Task<PagedResult<AssetSummaryDto>> SearchAsync(AssetSearchQuery query, CancellationToken ct = default)
@@ -206,6 +228,42 @@ namespace kgs_api.Services
             return rows.Select(r => new AssetNearbyDto(
                     r.Id, r.Name, r.TypeProperty, r.Status,
                     r.Location!.Y, r.Location.X, r.DistanceMeters))
+                .ToList();
+        }
+
+        public async Task<IReadOnlyList<AssetMapPinDto>> GetMapPinsAsync(CancellationToken ct = default)
+        {
+            // ← KHÔNG còn .Where(a => a.Location != null) — trả TẤT CẢ tài sản của user,
+            //   kể cả chưa gắn vị trí (đúng yêu cầu ở docs/api-map-pins.md: "Vẫn phải trả về,
+            //   với latitude/longitude = null. Frontend liệt kê chúng riêng trong overlay
+            //   danh sách kèm nút Bổ sung — bỏ sót là người dùng không biết mình còn tài sản
+            //   chưa gắn vị trí.")
+
+            // Materialize TRƯỚC bằng kiểu vô danh, tách Location.Y/.X SAU — giữ đúng nguyên
+            // tắc đã sửa từ lỗi ST_Y(geography) does not exist ở đầu dự án
+            var raw = await _assets.Query().AsNoTracking()
+                .Where(a => a.UserId == _currentUser.UserId)
+                .Select(a => new
+                {
+                    a.Id,
+                    a.Name,
+                    a.TypeProperty,
+                    a.OwnershipType,
+                    a.Status,
+                    a.Address.City,
+                    a.Address.District,
+                    a.CurrentValue,
+                    ThumbnailUrl = a.Thumbnail == null ? null : a.Thumbnail.Url,
+                    a.LinkedPropertyId,
+                    a.Location   // giữ nguyên object Point?, tách Y/X sau khi đã materialize
+                })
+                .ToListAsync(ct);
+
+            return raw.Select(r => new AssetMapPinDto(
+                r.Id, r.Name, r.TypeProperty, r.OwnershipType, r.Status,
+                r.City, r.District, r.CurrentValue, r.ThumbnailUrl, r.LinkedPropertyId,
+                r.Location?.Y,   // null nếu r.Location null — đúng ý đồ, KHÔNG throw, KHÔNG loại bỏ dòng
+                r.Location?.X))
                 .ToList();
         }
 

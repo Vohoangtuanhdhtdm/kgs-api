@@ -1,10 +1,12 @@
-﻿using kgs_api.Domain.Entity;
+﻿using CloudinaryDotNet.Actions;
+using kgs_api.Domain.Entity;
 using kgs_api.Domain.Entity.SubEntity;
 using kgs_api.Domain.ValueObjects;
 using kgs_api.Dtos;
 using kgs_api.Interfaces;
 using kgs_api.Repositories;
 using Microsoft.EntityFrameworkCore;
+using NetTopologySuite.Geometries;
 using static kgs_api.Common.Common;
 using static kgs_api.Domain.Enums;
 
@@ -17,11 +19,13 @@ namespace kgs_api.Services
         private readonly IRepository<AssetMedia> _media;
         private readonly IUnitOfWork _uow;
         private readonly ICurrentUserService _currentUser;
+        private readonly GeometryFactory _geometryFactory;
 
         public PropertyListingService(IRepository<Asset> assets, IRepository<Property> properties,
             IRepository<AssetMedia> media, IUnitOfWork uow, ICurrentUserService currentUser)
         {
             _assets = assets; _properties = properties; _media = media; _uow = uow; _currentUser = currentUser;
+            _geometryFactory = NetTopologySuite.NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
         }
 
         public async Task<OwnerListingDto> CreateFromAssetAsync(Guid assetId, CreateListingFromAssetRequest request, CancellationToken ct = default)
@@ -59,16 +63,21 @@ namespace kgs_api.Services
                 Ward = asset.Address.Ward,
                 AddressDetail = asset.Address.Detail,
                 Area = asset.Area ?? 0,
-                Frontage = request.Frontage,
-                PropertyType = request.PropertyType,
-                Floors = request.Floors,
-                Bedrooms = request.Bedrooms,
-                Bathrooms = request.Bathrooms,
-                HouseDirection = request.HouseDirection,
-                LegalStatus = request.LegalStatus,
-                FurnitureState = request.FurnitureState,
-                Latitude = asset.Location?.Y.ToString(),
-                Longitude = asset.Location?.X.ToString(),
+                Frontage = request.Frontage ?? 0,
+
+                // ← SỬA 6 dòng — chuỗi ưu tiên: giá trị người dùng nhập (request)
+                //   → nếu trống, lấy từ Asset đã lưu → nếu Asset cũng trống, dùng mặc định
+                Floors = request.Floors ?? asset.Floors ?? 0,
+                Bedrooms = request.Bedrooms ?? asset.Bedrooms ?? 0,
+                Bathrooms = request.Bathrooms ?? asset.Bathrooms ?? 0,
+                HouseDirection = request.HouseDirection ?? asset.HouseDirection ?? string.Empty,
+                LegalStatus = request.LegalStatus ?? asset.LegalStatus ?? string.Empty,
+                FurnitureState = request.FurnitureState ?? asset.FurnitureState ?? string.Empty,
+
+                // ← MỚI — không nhận từ request nữa, tự suy từ loại tài sản
+                PropertyType = MapAssetTypeToDisplayString(asset.TypeProperty),
+
+                Location = asset.Location,
                 Status = PropertyStatus.Pending,
                 Slug = slug,
                 ViewCount = 0,
@@ -119,17 +128,32 @@ namespace kgs_api.Services
                 q = q.Where(p => EF.Functions.ILike(p.Title, kw) || EF.Functions.ILike(p.AddressDetail, kw));
             }
 
+            // ← MỚI — tìm theo bán kính, CHỈ áp dụng khi cả 3 tham số đều có giá trị
+            NetTopologySuite.Geometries.Point? origin = null;
+            var hasGeoSearch = query.Latitude is not null && query.Longitude is not null && query.RadiusMeters is not null;
+            if (hasGeoSearch)
+            {
+                origin = _geometryFactory.CreatePoint(new Coordinate(query.Longitude!.Value, query.Latitude!.Value));
+                q = q.Where(p => p.Location != null
+                               && EF.Functions.IsWithinDistance(p.Location, origin, query.RadiusMeters!.Value, true));
+            }
+
             var total = await q.CountAsync(ct);
             var pageSize = Math.Clamp(query.PageSize, 1, 50);
             var page = Math.Max(query.Page, 1);
 
-            var items = await q
-                .OrderByDescending(p => p.CreatedAt)
+            // Sắp xếp theo khoảng cách nếu đang tìm theo vị trí, ngược lại theo tin mới nhất
+            var ordered = hasGeoSearch
+                ? q.OrderBy(p => p.Location!.Distance(origin))
+                : q.OrderByDescending(p => p.CreatedAt);
+
+            var items = await ordered
                 .Skip((page - 1) * pageSize).Take(pageSize)
                 .Select(p => new PublicPropertySummaryDto(
                     p.Id, p.Slug!, p.Title, p.Type, p.Price, p.RentPaymentCycle,
                     p.City, p.District, p.Bedrooms, p.Bathrooms, p.Area,
-                    p.Images.OrderBy(i => i.SortOrder).Select(i => i.File.Url).FirstOrDefault()))
+                    p.Images.OrderBy(i => i.SortOrder).Select(i => i.File.Url).FirstOrDefault(),
+                    hasGeoSearch ? (double?)p.Location!.Distance(origin!) : null))
                 .ToListAsync(ct);
 
             return new PagedResult<PublicPropertySummaryDto>(items, page, pageSize, total);
@@ -153,8 +177,8 @@ namespace kgs_api.Services
                 .Select(p => new { p.User.Name, p.User.PhoneNumber })
                 .FirstAsync(ct);
 
-            double.TryParse(property.Latitude, out var lat);
-            double.TryParse(property.Longitude, out var lng);
+            //double.TryParse(property.Latitude, out var lat);
+            //double.TryParse(property.Longitude, out var lng);
 
             return new PublicPropertyDetailDto(
                 property.Id, property.Slug!, property.Title, property.Description, property.Type,
@@ -162,7 +186,8 @@ namespace kgs_api.Services
                 property.City, property.District, property.Ward, property.AddressDetail,
                 property.Area, property.Frontage, property.Floors, property.Bedrooms, property.Bathrooms,
                 property.HouseDirection, property.LegalStatus, property.FurnitureState, property.PropertyType,
-                lat == 0 ? null : lat, lng == 0 ? null : lng,
+                // THAY bằng:
+                property.Location?.Y, property.Location?.X,   // Y=lat, X=lng — ĐÚNG THỨ TỰ, dễ đảo nhầm*/
                 property.Images.OrderBy(i => i.SortOrder).Select(i => i.File.Url).ToList(),
                 property.ViewCount,
                 owner.Name, owner.PhoneNumber ?? "Chưa cập nhật số điện thoại");
@@ -206,5 +231,18 @@ namespace kgs_api.Services
             normalized = System.Text.RegularExpressions.Regex.Replace(normalized, @"\s+", "-").Trim('-');
             return normalized.Length > 60 ? normalized[..60].Trim('-') : normalized;
         }
+
+        /// <summary>Chuyển enum loại tài sản thành chuỗi hiển thị cho tin đăng công khai —
+        /// thay cho việc bắt người dùng nhập lại loại hình lần thứ hai.</summary>
+        private static string MapAssetTypeToDisplayString(AssetDomainType type) => type switch
+        {
+            AssetDomainType.PrivateHouse => "Nhà riêng",
+            AssetDomainType.Apartment => "Căn hộ",
+            AssetDomainType.Land => "Đất",
+            AssetDomainType.Villa => "Biệt thự",
+            AssetDomainType.Shophouse => "Nhà mặt phố",
+            AssetDomainType.Office => "Văn phòng",
+            _ => "Khác"
+        };
     }
 }

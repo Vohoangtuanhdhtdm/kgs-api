@@ -58,6 +58,13 @@ namespace kgs_api.Controllers
 
         // -------------------- A2. NEARBY (PostGIS) --------------------
 
+        [HttpGet("map-pins")]
+        public async Task<ActionResult<IReadOnlyList<AssetMapPinDto>>> GetMapPins(CancellationToken ct)
+        {
+            var result = await _assets.GetMapPinsAsync(ct);
+            return Ok(result);
+        }
+
         [HttpGet("nearby")]
         public async Task<ActionResult<IReadOnlyList<AssetNearbyDto>>> Nearby(
             [FromQuery] NearbyQuery query, CancellationToken ct)

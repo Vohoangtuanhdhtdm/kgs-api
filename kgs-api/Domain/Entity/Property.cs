@@ -1,4 +1,5 @@
 ﻿using kgs_api.Domain.Entity.SubEntity;
+using NetTopologySuite.Geometries;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using static kgs_api.Domain.Enums;
@@ -44,8 +45,9 @@ namespace kgs_api.Domain.Entity
         public string LegalStatus { get; set; } = string.Empty;
         public string FurnitureState { get; set; } = string.Empty;
 
-        public string? Latitude { get; set; }
-        public string? Longitude { get; set; }
+        
+        // (using NetTopologySuite.Geometries):
+        public Point? Location { get; set; }   // geography(Point, 4326). GOTCHA: X=Longitude, Y=Latitude */
 
 
         // "Pending" (Chờ duyệt), "Approved" (Đã duyệt), "Rejected" (Bị từ chối), "Sold" (Đã bán)

@@ -13,6 +13,21 @@ namespace kgs_api.Dtos
         [Required, MaxLength(100)] string Ward,
         [MaxLength(500)] string Detail);
 
+    public sealed record AssetMapPinDto(
+        Guid Id,
+        string Name,
+        AssetDomainType Type,
+        AssetOwnershipType OwnershipType,
+        AssetStatus Status,
+        string City,
+        string District,
+        decimal? CurrentValue,
+        string? ThumbnailUrl,
+        int? LinkedPropertyId,
+        double? Latitude,    // null nếu tài sản chưa gắn vị trí — KHÔNG loại tài sản này khỏi kết quả
+        double? Longitude);  // null nếu tài sản chưa gắn vị trí
+
+
     /// <summary>Client luôn gửi/nhận lat-lng; chuyển đổi sang NTS Point nằm trong service.</summary>
     public sealed record GeoPointDto(
         [Range(-90, 90)] double Latitude,
@@ -32,7 +47,13 @@ namespace kgs_api.Dtos
         [Range(0, double.MaxValue)] double? Area,
         [Range(0, (double)decimal.MaxValue)] decimal? CurrentValue,
         DateTime? AcquisitionDate,
-        string? Notes);
+        string? Notes,
+        [Range(0, 200)] int? Floors,
+        [Range(0, 100)] int? Bedrooms,
+        [Range(0, 100)] int? Bathrooms,
+        [MaxLength(50)] string? HouseDirection,
+        [MaxLength(100)] string? LegalStatus,
+        [MaxLength(100)] string? FurnitureState);
 
     public sealed record AssetUpdateRequest(
         [Required, MaxLength(255)] string Name,
@@ -43,7 +64,14 @@ namespace kgs_api.Dtos
         double? Area,
         decimal? CurrentValue,
         DateTime? AcquisitionDate,
-        string? Notes);
+        string? Notes,
+        [Range(0, 200)] int? Floors,
+        [Range(0, 100)] int? Bedrooms,
+        [Range(0, 100)] int? Bathrooms,
+        [MaxLength(50)] string? HouseDirection,
+        [MaxLength(100)] string? LegalStatus,
+        [MaxLength(100)] string? FurnitureState
+        );
 
     public sealed record AssetSearchQuery(
         string? Keyword,
@@ -73,7 +101,8 @@ namespace kgs_api.Dtos
         AddressDto Address, GeoPointDto? Location, double? Area,
         decimal? CurrentValue, DateTime? AcquisitionDate, string? Notes,
         StoredFileDto? Thumbnail, int? LinkedPropertyId,
-        int UnitCount, int ActiveContractCount, DateTime CreatedAt, DateTime? UpdatedAt);
+        int UnitCount, int ActiveContractCount, DateTime CreatedAt, DateTime? UpdatedAt, int? Floors, int? Bedrooms, int? Bathrooms,
+        string? HouseDirection, string? LegalStatus, string? FurnitureState);
 
     // ============================================================
     // A4–A5. MEDIA & DOCUMENTS
